@@ -1,0 +1,49 @@
+# -------------------
+# Python 관련
+# -------------------
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+build/
+dist/
+wheels/
+*.egg-info
+
+
+# 가상환경
+.venv/
+venv/
+env/
+ENV/
+
+# 환경변수 파일
+.env
+.env.*
+*.env
+
+# uv / 캐시
+.uv/
+.cache/
+.pytest_cache/
+
+# -------------------
+# Node / Frontend 관련
+# -------------------
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/.parcel-cache/
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# -------------------
+# OS / 에디터 관련
+# -------------------
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
