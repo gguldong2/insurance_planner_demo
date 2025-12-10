@@ -16,7 +16,7 @@ app = FastAPI(title="AgensGraph Agent API")
 # --- CORS Middleware 추가 ---
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],  # 실제 배포 시에는 ["http://localhost:5173"] 권장
+    allow_origins=["*"],  # 실제 배포 시에는 ["http://localhost:5173"] 권장
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -33,6 +33,22 @@ class ChatResponse(BaseModel):
     answer: str
     logs: List[str]
 
+# 문서 업로드 요청 모델
+class DocumentRequest(BaseModel):
+    texts: List[str] = Field(..., description="저장할 텍스트 리스트")
+    metadatas: Optional[List[dict]] = Field(None, description="각 텍스트의 메타데이터 (옵션)")
+
+@app.post("/documents", summary="지식 문서 업로드 (Vector DB)")
+async def upload_documents(req: DocumentRequest):
+    """
+    Qdrant Vector DB에 문서를 임베딩하여 저장합니다.
+    """
+    try:
+        count = add_texts_to_vector_db(req.texts, req.metadatas)
+        return {"status": "success", "added_count": count}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/chat", response_model=ChatResponse)
 async def chat_endpoint(req: ChatRequest):
     try:
@@ -47,7 +63,7 @@ async def chat_endpoint(req: ChatRequest):
             "trace_log": []
         }
         
-        result = await app_graph.ainvoke(inputs)
+        result = await app_graph.ainvoke(inputs)  #비동기(LangGraph의 비동기 실행 메서드)
         
         return ChatResponse(
             answer=result.get("final_answer", "No answer"),

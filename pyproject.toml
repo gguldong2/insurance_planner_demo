@@ -24,6 +24,15 @@ dependencies = [
     # --- Data Validation (Pydantic V2) ---
     "pydantic==2.11.4",
     "pydantic-core==2.33.2",
+
+
+    # [추가됨] Qdrant 벡터 검색용
+        "langchain-qdrant>=0.1.0",
+        "qdrant-client>=1.7.0",
+        "langchain-huggingface>=0.0.3",  # (임베딩 모델용)
+        "sentence-transformers>=2.2.0"  # (보통 자동으로 딸려오지만 안전하게)
+
+
 ]
 
 [build-system]

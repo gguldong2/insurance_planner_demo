@@ -33,7 +33,7 @@ function App() {
     try {
       // Backend API 호출 (FastAPI 포트 확인: 8080)
       // [Python 비유] response = requests.post("...", json={"query": ...})
-      const response = await axios.post("http://localhost:8080/chat", {
+      const response = await axios.post("http://localhost:8081/chat", {
         query: userMsg.text
       });
 
@@ -104,7 +104,7 @@ function App() {
           {messages.map((msg, idx) => (
             <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
               {/* Python의 f-string처럼 {변수명}을 쓰면 값이 들어갑니다 */}
-              {msg.text} 
+              {/* {msg.text}  */}
               <div className={`flex gap-3 max-w-[80%] ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 
                   ${msg.role === 'user' ? 'bg-blue-600 text-white' : 'bg-slate-700 text-white'}`}>
@@ -159,7 +159,7 @@ function App() {
       </div>
       
       {/* 3. 우측 로그 영역 */}
-      {logs.map((log, idx) => renderLogItem(log, idx))}
+      {/* {logs.map((log, idx) => renderLogItem(log, idx))} */}
       {/* 오른쪽: 워크플로우 로그 패널 (35%) */}
       <div className="w-[400px] bg-[#1e1e1e] flex flex-col border-l border-gray-700">
         <header className="p-3 border-b border-gray-700 bg-[#252526] text-gray-300 text-sm font-bold flex items-center gap-2">

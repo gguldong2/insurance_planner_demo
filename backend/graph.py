@@ -1,218 +1,317 @@
 import os
 import json
+import asyncio
 from typing import TypedDict, List, Dict, Any, Optional
 from langgraph.graph import StateGraph, END, START
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
-from backend.db import execute_query, execute_sql_query
+# [변경] async 처리가 된 DB 및 Vector 함수 임포트
+from backend.db import execute_query, execute_sql_query 
+from backend.vector_store import search_documents 
 from dotenv import load_dotenv
 
-
-# 환경 변수 로드 (API Key, DB 설정 등)
+# -------------------------------------------------------------------------
+# 1. 환경 설정
+# -------------------------------------------------------------------------
 load_dotenv()
 
-# --- LLM Client 설정 ---
-# vLLM 또는 로컬 LLM 서버에 연결 (OpenAI 호환 API 사용)
+# [LLM 설정]
+# Async 환경에서도 ChatOpenAI 객체는 동일하게 생성하되, 호출 시 ainvoke를 사용합니다.
 llm = ChatOpenAI(
-    base_url=os.getenv("VLLM_API_BASE"), # vLLM 서버 주소
-    api_key="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", # vLLM은 일반적으로 API Key를 사용하지 않음
-    model=os.getenv("VLLM_MODEL_NAME"), # 사용할 모델 이름 지정
-    temperature=0.1 # 창의성 조절 (낮을수록 일관된 코드 생성에 유리)
+    model="gpt-4o", 
+    temperature=0 
 )
 
-# --- State 정의 (AgentState) ---
-# LangGraph에서 모든 노드가 공유하고 읽고 쓸 수 있는 상태
+# -------------------------------------------------------------------------
+# 2. 상태(State) 정의
+# -------------------------------------------------------------------------
 class AgentState(TypedDict):
-    question: str                   # 1. 사용자 초기 질문
-    graph_schema: str               # 2. AgensGraph 스키마 정보 (Cypher 생성용)
-    sql_schema: str                 # 3. PostgreSQL 스키마 정보 (SQL 생성용)
-    mode: str                       # 4. 라우터가 결정한 실행 모드: "graph" | "sql" | "general"
-    generated_query: str            # 5. LLM이 생성한 Cypher 또는 SQL 쿼리
-    query_result: str               # 6. DB 실행 결과 (문자열)
-    evaluation: Dict[str, Any]      # 7. Critic 노드의 쿼리 유효성 검사 결과
-    final_answer: str               # 8. 최종 사용자에게 제공할 답변
-    retry_count: int                # 9. 쿼리 재생성 시도 횟수
-    error: Optional[str]            # 10. 실행기(Executor)에서 발생한 에러 메시지
-    trace_log: List[str]            # 11. 워크플로우 추적 로그 (프론트엔드 출력용)
+    """
+    LangGraph 상태 스키마 (이전과 동일)
+    """
+    question: str
+    graph_schema: str
+    sql_schema: str
+    mode: str                       # graph | sql | vector | general
+    generated_query: str
+    query_result: str
+    context: List[str]              # RAG용 검색 문서
+    evaluation: Dict[str, Any]      # 검증 결과
+    final_answer: str
+    retry_count: int
+    error: Optional[str]            # 실행 에러 메시지
+    trace_log: List[str]
 
-# --- Prompts 정의 ---
-ROUTER_PROMPT = """Classify the question:
-1. 'graph': Relationships, hierarchy, connections.
-2. 'sql': Statistics, counts, logs, raw data.
-3. 'general': Greetings, others.
-Output only the keyword."""
+# -------------------------------------------------------------------------
+# 3. Helper 함수
+# -------------------------------------------------------------------------
+def update_trace(state: AgentState, step: str, detail: str) -> List[str]:
+    """로그 업데이트 (CPU 연산이므로 동기 함수 유지)"""
+    log = state.get("trace_log", []) or []
+    return list(log) + [f"[{step}] {detail}"]
 
-GEN_PROMPT = """Convert question to {mode} query.
+# -------------------------------------------------------------------------
+# 4. 프롬프트 정의 (분리된 구조)
+# -------------------------------------------------------------------------
+ROUTER_PROMPT = """You are a classification assistant. Classify the user question into one of these three categories:
+
+1. 'graph': ONLY for questions about relationships, connections, hierarchy, or network structures between entities.
+2. 'sql': ONLY for questions asking for aggregations, statistics, counts, raw logs, or table data.
+3. 'general': For greetings (hi, hello), self-introduction, questions about the AI itself, or vague questions that don't fit graph/sql.
+
+User Question: {question}
+
+Rule: If the question is a simple greeting like "hi" or "hello", YOU MUST output 'general'.
+Output only the keyword (graph, sql, general)."""
+
+CYPHER_GEN_PROMPT = """You are a Cypher expert.
 Schema: {schema}
 Feedback: {feedback}
-Output code only."""
+Task: Convert '{question}' to Cypher.
+Output ONLY code."""
+
+SQL_GEN_PROMPT = """You are a SQL expert.
+Schema: {schema}
+Feedback: {feedback}
+Task: Convert '{question}' to SQL.
+Output ONLY code."""
 
 CRITIC_PROMPT = """Validate {mode} query.
 Schema: {schema}
 Query: {query}
 Return JSON: {{"valid": bool, "reason": str}}"""
 
-# --- Helper 함수 ---
-def update_trace(state: AgentState, step: str, detail: str):
-    """상태에 실행 로그를 추가하고 업데이트된 로그 리스트를 반환"""
-    log = state.get("trace_log", []) or []
-    return list(log) + [f"[{step}] {detail}"]
+SUMMARIZER_PROMPT = """Answer based on Context and DB Result.
+Context: {c}
+DB Result: {r}
+Question: {q}
+"""
 
-# --- Nodes 정의 (워크플로우 단계) ---
-# 
+# -------------------------------------------------------------------------
+# 5. [Async] 노드 정의
+# -------------------------------------------------------------------------
+# 모든 노드 함수 앞에 'async' 키워드가 붙습니다.
 
-def node_router(state: AgentState):
-    """사용자 질문을 분석하여 실행 모드(graph/sql/general)를 결정하는 노드"""
+async def node_router(state: AgentState):
+    """[Router] LLM을 비동기 호출하여 모드를 결정합니다."""
     chain = ChatPromptTemplate.from_template(ROUTER_PROMPT) | llm
     try:
-        decision = chain.invoke({"question": state["question"]}).content.strip().lower()
+        # [변경] invoke -> ainvoke (await 필수)
+        res = await chain.ainvoke({"question": state["question"]})
+        decision = res.content.strip().lower()
     except:
-        # LLM 호출 실패 시 기본값
         decision = "general"
     
     if "graph" in decision: mode = "graph"
     elif "sql" in decision: mode = "sql"
+    elif "vector" in decision: mode = "vector"
     else: mode = "general"
     
-    # mode와 로그를 상태에 업데이트
     return {"mode": mode, "trace_log": update_trace(state, "Router", f"Mode: {mode}")}
 
-def node_generator(state: AgentState):
-    """결정된 모드에 따라 Cypher 또는 SQL 쿼리를 생성하는 노드"""
-    mode = state["mode"]
-    # 모드에 따라 사용할 스키마를 결정
-    schema = state["graph_schema"] if mode == "graph" else state["sql_schema"]
-    # 이전 Critic 노드에서 받은 피드백 (재시도 시 사용)
-    feedback = state.get("evaluation", {}).get("reason", "")
+async def node_retriever(state: AgentState):
+    """[Retriever] 비동기 Vector DB 검색을 수행합니다."""
+    query = state["question"]
+
+    # 1. vector_store.py에서 가져온 함수 실행
+    # search_documents가 async 함수이므로 await 사용
+    docs = await search_documents(query, k=3)
     
-    chain = ChatPromptTemplate.from_template(GEN_PROMPT) | llm
-    response = chain.invoke({
-        "mode": "Cypher" if mode == "graph" else "SQL",
-        "schema": schema,
-        "feedback": feedback,
-        "question": state["question"]
-    })
-    
-    # 응답에서 코드 블록(```cypher, ```sql)을 제거하고 순수 쿼리 추출
-    query = response.content.strip().replace("```cypher", "").replace("```sql", "").replace("```", "")
+
+    # 2. 로그에 보여줄 내용 정리 (문서 내용이 있으면 앞부분만 잘라서 보여줌)
+    # docs가 문자열 리스트인지 Document 객체 리스트인지에 따라 처리
+    if docs and hasattr(docs[0], 'page_content'):
+        doc_preview = ", ".join([d.page_content[:20] + "..." for d in docs])
+    else:
+        doc_preview = str(docs)[:50]
     
     return {
+            "context": docs,
+            "query_result": "N/A (Vector Mode)",
+            "trace_log": update_trace(state, "Retriever", f"Found {len(docs)} docs: {doc_preview}")
+        }
+
+async def node_gen_graph(state: AgentState):
+    """[Gen Graph] Cypher 쿼리 비동기 생성"""
+    schema = state["graph_schema"]
+    feedback = state.get("evaluation", {}).get("reason", "")
+    
+    chain = ChatPromptTemplate.from_template(CYPHER_GEN_PROMPT) | llm
+    # [변경] ainvoke
+    response = await chain.ainvoke({
+        "schema": schema, "feedback": feedback, "question": state["question"]
+    })
+    
+    query = response.content.strip().replace("```cypher", "").replace("```", "")
+    return {
         "generated_query": query,
-        "retry_count": state.get("retry_count", 0) + 1, # 재시도 횟수 증가
-        "trace_log": update_trace(state, "Generator", f"Query: {query[:80]}...")
+        "retry_count": state.get("retry_count", 0) + 1,
+        "trace_log": update_trace(state, "GenGraph", "Query generated")
     }
 
-def node_critic(state: AgentState):
-    """생성된 쿼리가 스키마에 맞고 논리적으로 유효한지 검증하는 노드"""
+async def node_gen_sql(state: AgentState):
+    """[Gen SQL] SQL 쿼리 비동기 생성"""
+    schema = state["sql_schema"]
+    feedback = state.get("evaluation", {}).get("reason", "")
+    
+    chain = ChatPromptTemplate.from_template(SQL_GEN_PROMPT) | llm
+    # [변경] ainvoke
+    response = await chain.ainvoke({
+        "schema": schema, "feedback": feedback, "question": state["question"]
+    })
+    
+    query = response.content.strip().replace("```sql", "").replace("```", "")
+    return {
+        "generated_query": query,
+        "retry_count": state.get("retry_count", 0) + 1,
+        "trace_log": update_trace(state, "GenSQL", "Query generated")
+    }
+
+async def node_critic(state: AgentState):
+    """[Critic] 비동기 검증"""
     mode = state["mode"]
     schema = state["graph_schema"] if mode == "graph" else state["sql_schema"]
     
     chain = ChatPromptTemplate.from_template(CRITIC_PROMPT) | llm
-
-    # LLM 호출 및 JSON 파싱
     try:
-        res = chain.invoke({"mode": mode, "schema": schema, "query": state["generated_query"]})
+        # [변경] ainvoke
+        res = await chain.ainvoke({
+            "mode": "Cypher" if mode == "graph" else "SQL", 
+            "schema": schema, "query": state["generated_query"]
+        })
         content = res.content.strip()
-        # 코드 블록이 있다면 제거
         if content.startswith("```json"): content = content[7:-3]
         eval_result = json.loads(content)
     except:
-        # JSON 파싱 실패나 LLM 호출 실패 시, 안전을 위해 일단 유효하다고 간주하고 다음 단계로 진행
-        eval_result = {"valid": True, "reason": "Parsing failed or LLM failed"}
-    
-    # --- [수정] 로그 메시지는 eval_result가 정의된 후 생성되어야 합니다. ---
-    valid = eval_result.get('valid')
-    reason = eval_result.get('reason', '')
-    detail_log = f"Valid: {valid}, Reason: {reason}"
-    # ------------------------------------------------------------------
+        eval_result = {"valid": True, "reason": "Parsing failed"}
     
     return {
         "evaluation": eval_result,
-        "trace_log": update_trace(state, "Critic", detail_log)
+        "trace_log": update_trace(state, "Critic", f"Valid: {eval_result.get('valid')}")
     }
 
-def node_executor(state: AgentState):
-    """생성된 쿼리를 DB에 실행하고 결과를 가져오는 노드"""
+async def node_executor(state: AgentState):
+    """[Executor] 비동기 DB 실행 (db.py에서 Thread로 실행됨)"""
     try:
-        # 모드에 따라 적절한 DB 실행 함수 호출
         if state["mode"] == "graph":
-            res = execute_query(state["generated_query"])
+            # [변경] await execute_query
+            res = await execute_query(state["generated_query"])
         else:
-            res = execute_sql_query(state["generated_query"])
+            # [변경] await execute_sql_query
+            res = await execute_sql_query(state["generated_query"])
         
-        # 결과 로그 (결과 행 수 기반)
-        detail_log = f"Rows: {len(res)}"
-
         return {
-            "query_result": str(res), # 결과를 문자열로 변환하여 상태에 저장
-            "error": None, 
-            "trace_log": update_trace(state, "Executor", detail_log)
+            "query_result": str(res),
+            "error": None,
+            "trace_log": update_trace(state, "Executor", f"Success, Rows: {len(res)}")
         }
     except Exception as e:
-        # DB 연결 또는 쿼리 실행 실패 시 에러 상태 저장
         return {
-            "error": str(e), 
-            "trace_log": update_trace(state, "Executor", f"Error: {e}")
+            "error": str(e),
+            "trace_log": update_trace(state, "Executor", f"DB Error: {e}")
         }
 
-def node_summarizer(state: AgentState):
-    """DB 실행 결과를 바탕으로 최종 답변을 생성하는 노드"""
-    chain = ChatPromptTemplate.from_template("Answer based on result.\nQ: {q}\nResult: {r}") | llm
-    ans = chain.invoke({"q": state["question"], "r": state.get("query_result")})
+async def node_summarizer(state: AgentState):
+    """[Summarizer] 최종 답변 생성"""
+    chain = ChatPromptTemplate.from_template(SUMMARIZER_PROMPT) | llm
+    
+    db_res = state.get("query_result", "N/A")
+    docs = state.get("context", [])
+    doc_text = "\n".join(docs) if docs else "No docs"
+    
+    # [변경] ainvoke
+    ans = await chain.ainvoke({
+        "q": state["question"], "r": db_res, "c": doc_text
+    })
+    
     return {"final_answer": ans.content}
 
-def node_general(state: AgentState):
-    """DB와 관련 없는 일반적인 질문(인사, 날씨 등)에 응답하는 노드"""
-    ans = llm.invoke(state["question"])
+async def node_general(state: AgentState):
+    """[General] 비동기 잡담"""
+    # [변경] ainvoke
+    ans = await llm.ainvoke(state["question"])
     return {"final_answer": ans.content}
 
-def node_fail(state: AgentState):
-    """쿼리 재시도 횟수 초과 또는 치명적인 DB 에러 발생 시 최종 에러 메시지를 반환하는 노드"""
-    return {"final_answer": "Error: 데이터베이스 조회 실패 또는 쿼리 생성 재시도 횟수 초과"}
+async def node_fail(state: AgentState):
+    """
+    [Fail] 에러 구분 로직 (요청하신 기능 반영)
+    async 함수여야 LangGraph가 await로 호출할 수 있습니다.
+    """
+    error_msg = state.get("error")
+    retry_cnt = state.get("retry_count", 0)
+    
+    if error_msg:
+        final_msg = f"죄송합니다. 데이터베이스 오류가 발생했습니다.\n(Error: {error_msg})"
+        detail = "Fail: DB Execution Error"
+    elif retry_cnt >= 3:
+        final_msg = "죄송합니다. 올바른 쿼리를 생성하지 못했습니다. (재시도 초과)"
+        detail = "Fail: Max Retries"
+    else:
+        final_msg = "알 수 없는 오류가 발생했습니다."
+        detail = "Fail: Unknown"
 
-# --- Graph Wiring (그래프 연결) ---
+    return {
+        "final_answer": final_msg,
+        "trace_log": update_trace(state, "FailNode", detail)
+    }
+
+# -------------------------------------------------------------------------
+# 6. 그래프 조립 (Wiring)
+# -------------------------------------------------------------------------
+# *중요*: 노드 함수들이 async여도 workflow 정의 방식은 동일합니다.
+# LangGraph 컴파일러가 실행 시 자동으로 비동기를 감지합니다.
+
 workflow = StateGraph(AgentState)
-# 1. 노드 추가
+
+# 노드 등록
 workflow.add_node("router", node_router)
-workflow.add_node("generator", node_generator)
+workflow.add_node("retriever", node_retriever)
+workflow.add_node("gen_graph", node_gen_graph)
+workflow.add_node("gen_sql", node_gen_sql)
 workflow.add_node("critic", node_critic)
 workflow.add_node("executor", node_executor)
 workflow.add_node("summarizer", node_summarizer)
 workflow.add_node("general", node_general)
 workflow.add_node("fail", node_fail)
 
-# 2. 시작 지점 설정
+# 엣지 연결 (이전과 논리 동일)
 workflow.add_edge(START, "router")
 
-# 3. 라우터 조건부 분기: DB 필요 여부에 따라 분기
 workflow.add_conditional_edges(
     "router",
-    # 람다 함수를 통해 'mode' 값에 따라 다음 노드를 결정
-    lambda s: "general" if s["mode"] == "general" else "generator",
-    {"general": "general", "generator": "generator"}
+    lambda x: x["mode"] if x["mode"] != "vector" else "retriever",
+    {
+        "retriever": "retriever",
+        "graph": "gen_graph", # mode 이름과 노드 매핑
+        "sql": "gen_sql",
+        "general": "general"
+    }
 )
 
-# 4. 쿼리 생성 후 검증기로 이동
-workflow.add_edge("generator", "critic")
+# Vector Path
+workflow.add_edge("retriever", "summarizer")
 
-# 5. 검증기 조건부 분기: 쿼리가 유효한지, 재시도를 했는지 판단
-def critic_logic(s):
-    if s["evaluation"].get("valid"): return "executor"    # 유효하면 실행
-    if s["retry_count"] >= 3: return "fail"               # 3회 이상 실패 시 종료
-    return "generator"                                    # 다시 생성기로 돌아가 피드백 반영
+# DB Generation Path
+workflow.add_edge("gen_graph", "critic")
+workflow.add_edge("gen_sql", "critic")
+
+# Critic Logic
+def critic_logic(state):
+    if state["evaluation"].get("valid"): return "executor"
+    if state["retry_count"] >= 3: return "fail"
+    return "gen_graph" if state["mode"] == "graph" else "gen_sql"
 
 workflow.add_conditional_edges("critic", critic_logic)
 
-# 6. 실행기 조건부 분기: DB 실행 중 에러가 났는지 판단
-def exec_logic(s):
-    return "fail" if s.get("error") else "summarizer" # 에러가 있다면 fail, 아니면 요약으로
+# Executor Logic
+def exec_logic(state):
+    return "fail" if state.get("error") else "summarizer"
 
 workflow.add_conditional_edges("executor", exec_logic)
 
-# 7. 최종 종료 지점 연결
+# Ends
 workflow.add_edge("summarizer", END)
 workflow.add_edge("general", END)
 workflow.add_edge("fail", END)
 
-# 8. 그래프 컴파일 및 실행 준비
 app_graph = workflow.compile()
