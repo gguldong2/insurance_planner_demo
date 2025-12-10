@@ -7,6 +7,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from backend.db import execute_query, execute_sql_query
 from dotenv import load_dotenv
 
+
 # 환경 변수 로드 (API Key, DB 설정 등)
 load_dotenv()
 
@@ -14,7 +15,7 @@ load_dotenv()
 # vLLM 또는 로컬 LLM 서버에 연결 (OpenAI 호환 API 사용)
 llm = ChatOpenAI(
     base_url=os.getenv("VLLM_API_BASE"), # vLLM 서버 주소
-    api_key="EMPTY", # vLLM은 일반적으로 API Key를 사용하지 않음
+    api_key="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", # vLLM은 일반적으로 API Key를 사용하지 않음
     model=os.getenv("VLLM_MODEL_NAME"), # 사용할 모델 이름 지정
     temperature=0.1 # 창의성 조절 (낮을수록 일관된 코드 생성에 유리)
 )
