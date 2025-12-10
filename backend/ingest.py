@@ -7,7 +7,8 @@ from qdrant_client.http.models import Distance, VectorParams
 # 1. 임베딩 모델 준비 (한국어 성능 좋은 모델)
 # 처음 실행 시 모델을 다운로드하느라 시간이 좀 걸릴 수 있습니다.
 embeddings = HuggingFaceEmbeddings(
-    model_name="jhgan/ko-sroberta-multitask"
+    model_name="nlpai-lab/KURE-v1",
+    encode_kwargs={"normalize_embeddings": True},
 )
 
 # 2. Qdrant 클라이언트 연결
@@ -21,7 +22,7 @@ if client.collection_exists(collection_name):
 
 client.create_collection(
     collection_name=collection_name,
-    vectors_config=VectorParams(size=768, distance=Distance.COSINE),
+    vectors_config=VectorParams(size=1024, distance=Distance.COSINE),
 )
 
 # 4. 넣을 데이터 준비 (테스트용)

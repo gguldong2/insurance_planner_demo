@@ -1,9 +1,20 @@
 import os
-from langchain_openai import OpenAIEmbeddings
+
+#OpenAI
+# from langchain_openai import OpenAIEmbeddings
+# from langchain_qdrant import QdrantVectorStore
+# from qdrant_client import QdrantClient
+# from qdrant_client.http.models import Distance, VectorParams
+# from dotenv import load_dotenv
+
+#HuggingFace
+from langchain_huggingface import HuggingFaceEmbeddings 
 from langchain_qdrant import QdrantVectorStore
 from qdrant_client import QdrantClient
 from qdrant_client.http.models import Distance, VectorParams
 from dotenv import load_dotenv
+
+
 
 load_dotenv()
 
@@ -13,8 +24,10 @@ COLLECTION_NAME = os.getenv("QDRANT_COLLECTION_NAME", "my_knowledge_base")
 
 # embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
 # [변경] 한국어 성능이 좋은 로컬 모델로 설정
-embeddings = HuggingFaceEmbeddings(model_name="jhgan/ko-sroberta-multitask")
-
+embeddings = HuggingFaceEmbeddings(
+    model_name="nlpai-lab/KURE-v1",
+    encode_kwargs={"normalize_embeddings": True},
+)
 
 def get_vector_store():
     """QdrantVectorStore 객체 반환"""
