@@ -14,7 +14,7 @@ try:
         print(row)
         
     if not results:
-        print("⚠️ 연결은 성공했으나 데이터가 없습니다. (그래프 생성은 됐으나 노드가 없을 수 있음)")
+        print("⚠️ 연결은 성공했으나 데이터가 없습니다. (그래프 생성은 됐으나x 노드가 없을 수 있음)")
 
 except Exception as e:
     print(f"\n❌ 실패! 에러 로그:\n{e}")
