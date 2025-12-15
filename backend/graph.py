@@ -22,6 +22,17 @@ llm = ChatOpenAI(
     temperature=0 
 )
 
+#openAI로 테스트 시
+# llm = ChatOpenAI(
+#     model=os.getenv("OPENAI_MODEL", "gpt-4.1-mini"),  # 기본값 제공
+#     api_key=os.getenv("OPENAI_API_KEY"),
+#     temperature=0.0,
+# )
+
+
+
+
+
 # -------------------------------------------------------------------------
 # 2. 상태(State) 정의
 # -------------------------------------------------------------------------
