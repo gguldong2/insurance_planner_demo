@@ -10,7 +10,7 @@ from typing import List, Dict, Any
 # ==========================================
 # [설정] 환경에 맞게 수정
 # ==========================================
-DATA_DIR = "./data"              # .md 파일 위치
+DATA_DIR = "./md_data"              # .md 파일 위치
 OUTPUT_FILE = "processed_data.pkl" # 적재용 데이터 (Pickle)
 DEBUG_FILE = "debug_chunks.json"   # 확인용 데이터 (JSON)
 EMBEDDING_MODEL_NAME = "BAAI/bge-m3"
