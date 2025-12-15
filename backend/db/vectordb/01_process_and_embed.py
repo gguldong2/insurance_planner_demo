@@ -8,18 +8,21 @@ from datetime import datetime
 from typing import List, Dict, Any
 
 # ==========================================
-# [설정] 환경에 맞게 수정
+# [설정]
 # ==========================================
-DATA_DIR = "./md_data"              # .md 파일 위치
-OUTPUT_FILE = "processed_data.pkl" # 적재용 데이터 (Pickle)
-DEBUG_FILE = "debug_chunks.json"   # 확인용 데이터 (JSON)
+DATA_DIR = "./data/md_data"
+OUTPUT_FILE = "processed_data.pkl"
+DEBUG_FILE = "debug_chunks.json"
 EMBEDDING_MODEL_NAME = "BAAI/bge-m3"
+
+# 파일명 분리 패턴 ('〉' 전각문자 또는 '>' 반각문자)
+SPLIT_PATTERN = re.compile(r'\s*[〉>]\s*')
 
 try:
     from FlagEmbedding import BGEM3FlagModel
     import torch
 except ImportError:
-    print("라이브러리 설치 필요: pip install FlagEmbedding torch")
+    print("라이브러리 설치 필요: uv add FlagEmbedding torch")
     exit()
 
 # ==========================================
@@ -27,83 +30,124 @@ except ImportError:
 # ==========================================
 class RegulationParser:
     def __init__(self):
-        # 정규표현식 패턴
-        self.pat_chapter = re.compile(r'^##\s+(제\d+장.*)')       # ## 제1장
-        self.pat_section = re.compile(r'^\*\*(제\d+절.*)\*\*')    # **제1절** (Bold)
-        self.pat_article = re.compile(r'^###\s+(제\d+조.*)')      # ### 제1조
-        self.pat_appendix = re.compile(r'^###\s+(\[별표.*)')      # ### [별표
-        self.pat_addenda_header = re.compile(r'^\*\*(부칙.*)\*\*') # **부칙...**
-        # 부칙 내 조항 (### 없이 텍스트로 시작하는 경우 대응)
-        self.pat_addenda_article = re.compile(r'^(제\d+조\(.*?\))') 
-        self.pat_date = re.compile(r'(\d{4}\.\s?\d{1,2}\.\s?\d{1,2})')
+        # 유연한 정규식 (들여쓰기 허용, 띄어쓰기 유연함)
+        self.pat_chapter = re.compile(r'^\s*##\s+(제\s*\d+\s*장.*)')
+        self.pat_section = re.compile(r'^\s*\*\*(제\s*\d+\s*절.*)\*\*')
+        self.pat_article = re.compile(r'^\s*###\s+(제\s*\d+\s*조.*)')
+        self.pat_appendix = re.compile(r'^\s*###\s+(\[별표.*)')
+        self.pat_addenda_header = re.compile(r'^\s*\*\*(부칙.*)\*\*')
+        self.pat_addenda_article = re.compile(r'^\s*(제\s*\d+\s*조\(.*?\))') 
+
+    def extract_meta_from_filename(self, filename: str):
+        """파일명 파싱 로직"""
+        name_only = filename.replace(".md", "")
+        doc_title = name_only
+        dept = "미분류"
+        
+        parts = SPLIT_PATTERN.split(name_only)
+        if len(parts) >= 2:
+            doc_title = parts[1].strip()
+            left_part = parts[0].strip()
+            left_tokens = left_part.split(' ', 1)
+            if len(left_tokens) == 2 and left_tokens[0].startswith("제"):
+                dept = left_tokens[1]
+            else:
+                dept = left_part
+        return doc_title, dept
 
     def parse_file(self, file_path: str) -> Dict[str, Any]:
         filename = os.path.basename(file_path)
+        doc_title, dept = self.extract_meta_from_filename(filename)
+
         with open(file_path, 'r', encoding='utf-8') as f:
             lines = f.readlines()
 
-        chunks = []
+        # ---------------------------------------------------------
+        # [수정된 핵심 로직] 헤더(메타데이터) 영역 읽기
+        # ---------------------------------------------------------
         header_lines = []
         line_idx = 0
-        
-        # 1. 헤더(메타데이터) 추출: 첫 '##' 나오기 전까지
-        while line_idx < len(lines):
-            line = lines[line_idx].strip()
-            if line.startswith("## "): break
-            if line: header_lines.append(line)
-            line_idx += 1
-            
-        header_full_text = "\n".join(header_lines)
-        
-        # 1-1. 메타데이터 파싱
-        doc_title = header_lines[1] if len(header_lines) > 1 else filename.replace(".md", "")
-        dept = "교무과" if "교무" in header_full_text else "미분류" # (필요시 정교화)
-        
-        last_revision_date = None
-        dates = self.pat_date.findall(header_full_text)
-        if dates:
-            last_revision_date = dates[-1] # 가장 마지막 날짜
+        has_title_header = False
 
-        # 2. 본문 파싱 상태 변수
+        while line_idx < len(lines):
+            line = lines[line_idx].rstrip()
+            stripped = line.strip()
+            
+            # [수정] 본문 시작 감지 조건 강화
+            # ##(장) 뿐만 아니라, ###(조), **(절/부칙) 중 하나라도 나오면 본문 시작으로 간주
+            is_body_start = (
+                self.pat_chapter.match(stripped) or 
+                self.pat_article.match(stripped) or 
+                self.pat_addenda_header.match(stripped) or
+                self.pat_section.match(stripped) or
+                self.pat_appendix.match(stripped)
+            )
+
+            if is_body_start:
+                break # 본문 시작! 루프 탈출
+            
+            if stripped: 
+                header_lines.append(line)
+                if stripped.startswith("# "): 
+                    has_title_header = True
+            line_idx += 1
+        
+        # 제목(#)이 없으면 2번째 줄에 강제 삽입
+        if not has_title_header and len(header_lines) >= 2:
+            header_lines[1] = "# " + header_lines[1].strip()
+        
+        header_full_text = "\n".join(header_lines)
+
+        # 날짜 추출
+        last_revision_date = None
+        date_match = re.findall(r'(\d{4}\.\s?\d{1,2}\.\s?\d{1,2})', filename)
+        if not date_match:
+            date_match = re.findall(r'(\d{4}\.\s?\d{1,2}\.\s?\d{1,2})', header_full_text)
+        if date_match:
+            last_revision_date = date_match[-1]
+
+        # 상태 변수
         state = {
-            "chapter": None,
+            "chapter": None, 
             "section": None,
             "is_addenda": False
         }
         
         current_chunk = {"title": None, "lines": []}
+        chunks = []
         
         def save_chunk():
             if current_chunk["title"] and current_chunk["lines"]:
-                # 텍스트 조립 (마크다운 원본 유지)
                 content_raw = "\n".join(current_chunk["lines"]).strip()
                 
-                # Payload 생성 (User 요구사항: 원본 그대로)
+                # Payload Content 복원
+                payload_content = ""
+                if current_chunk['title'].startswith("제") or current_chunk['title'].startswith("[별표"):
+                     payload_content = f"### {current_chunk['title']}\n{content_raw}"
+                else:
+                     payload_content = f"### {current_chunk['title']}\n{content_raw}"
+
                 payload = {
                     "doc_title": doc_title,
                     "dept": dept,
                     "last_revision_date": last_revision_date,
                     "header_full_text": header_full_text,
-                    
-                    # 계층 정보 (없으면 None)
                     "chapter": state["chapter"],
                     "section": state["section"],
                     "article": current_chunk["title"],
-                    
-                    # 마크다운 원본 내용 (적재용)
-                    "content": f"{current_chunk['title']}\n{content_raw}"
+                    "content": payload_content
                 }
                 
-                # 임베딩용 텍스트 생성 (경로 포함 + 마크다운 일부 유지)
-                # 예: [파일명] > [장] > [절] > [조] : [내용]
+                # Vector Text
                 path_parts = [doc_title]
                 if state["chapter"]: path_parts.append(state["chapter"])
                 if state["section"]: path_parts.append(state["section"])
-                
                 path_str = " > ".join(path_parts)
-                # 임베딩 텍스트
-                vector_text = f"{path_str} > {current_chunk['title']} :\n{content_raw}"
                 
+                vector_text = f"{path_str} > {current_chunk['title']} :\n{content_raw}"
+                if len(vector_text) > 4000:
+                    vector_text = vector_text[:4000]
+
                 chunks.append({
                     "vector_text": vector_text,
                     "payload": payload
@@ -112,56 +156,48 @@ class RegulationParser:
             current_chunk["title"] = None
             current_chunk["lines"] = []
 
-        # 라인 순회
+        # 본문 파싱 루프
         while line_idx < len(lines):
             line = lines[line_idx].rstrip()
             stripped = line.strip()
             
-            # (1) 장 (Chapter)
             if self.pat_chapter.match(stripped):
                 save_chunk()
                 state["chapter"] = self.pat_chapter.match(stripped).group(1)
                 state["section"] = None
                 state["is_addenda"] = False
                 
-            # (2) 부칙 (Addenda)
             elif self.pat_addenda_header.match(stripped):
                 save_chunk()
                 state["chapter"] = "부칙"
                 state["section"] = self.pat_addenda_header.match(stripped).group(1)
                 state["is_addenda"] = True
                 
-            # (3) 절 (Section) - 부칙 아닐 때
             elif not state["is_addenda"] and self.pat_section.match(stripped):
                 save_chunk()
                 state["section"] = self.pat_section.match(stripped).group(1)
                 
-            # (4) 조 (Article) - ### 제N조
             elif self.pat_article.match(stripped):
                 save_chunk()
                 current_chunk["title"] = self.pat_article.match(stripped).group(1)
                 
-            # (5) 별표 (Appendix)
             elif self.pat_appendix.match(stripped):
                 save_chunk()
                 current_chunk["title"] = self.pat_appendix.match(stripped).group(1)
-                state["chapter"] = None # 별표는 독립적이라 가정 (User 요청 반영)
-                state["section"] = None
+                state["section"] = None 
                 state["is_addenda"] = False
 
-            # (6) 부칙 내 조항 - 제N조...
             elif state["is_addenda"] and self.pat_addenda_article.match(stripped):
                 save_chunk()
                 current_chunk["title"] = self.pat_addenda_article.match(stripped).group(1)
 
-            # (7) 내용 누적
             else:
                 if current_chunk["title"]:
                     current_chunk["lines"].append(line)
             
             line_idx += 1
             
-        save_chunk() # 마지막 처리
+        save_chunk()
         return {"filename": filename, "chunks": chunks}
 
 # ==========================================
@@ -178,85 +214,86 @@ def generate_id(filename, article_title):
 def main():
     print("=== [Step 1] 파싱 및 임베딩 시작 ===")
     
-    # 1. 모델 로드
     print(f"모델 로딩 중: {EMBEDDING_MODEL_NAME}")
-    model = BGEM3FlagModel(EMBEDDING_MODEL_NAME, use_fp16=True)
+    try:
+        model = BGEM3FlagModel(EMBEDDING_MODEL_NAME, use_fp16=True)
+    except Exception as e:
+        print(f"모델 로드 실패: {e}")
+        return
+
     parser = RegulationParser()
     
-    all_files = [f for f in os.listdir(DATA_DIR) if f.endswith('.md')]
-    all_data_points = []
-    anomaly_files = [] # 구조가 이상한 파일
+    all_files = sorted([f for f in os.listdir(DATA_DIR) if f.endswith('.md')])
+    total_files = len(all_files)
     
-    debug_list = [] # JSON 저장용
+    all_data_points = []
+    anomaly_files = [] 
+    debug_list = [] 
 
-    for fname in all_files:
+    for idx, fname in enumerate(all_files, 1):
         path = os.path.join(DATA_DIR, fname)
         result = parser.parse_file(path)
         chunks = result["chunks"]
         
-        # [Anomaly Check] 파싱된 청크가 하나도 없으면 이상한 파일
         if not chunks:
             anomaly_files.append(fname)
+            print(f"[{idx}/{total_files}] [Warning] 청크 생성 실패: {fname}")
             continue
             
-        print(f"처리 중: {fname} ({len(chunks)}개 청크)")
+        print(f"[{idx}/{total_files}] 처리 중: {fname} ({len(chunks)}개 청크) -> ", end="", flush=True)
         
-        # 2. 임베딩 (Dense + Sparse)
-        texts = [c["vector_text"] for c in chunks]
-        output = model.encode(texts, return_dense=True, return_sparse=True, return_colbert_vecs=False)
-        
-        dense_vecs = output['dense_vecs']
-        sparse_vecs = output['lexical_weights']
+        try:
+            texts = [c["vector_text"] for c in chunks]
+            output = model.encode(texts, return_dense=True, return_sparse=True, return_colbert_vecs=False)
+            
+            dense_vecs = output['dense_vecs']
+            sparse_vecs = output['lexical_weights']
 
-        for i, chunk in enumerate(chunks):
-            # ID 생성
-            pid = generate_id(fname, chunk['payload']['article'])
+            for i, chunk in enumerate(chunks):
+                pid = generate_id(fname, chunk['payload']['article'])
+                
+                sp_indices = [int(k) for k in sparse_vecs[i].keys()]
+                sp_values = [float(v) for v in sparse_vecs[i].values()]
+                
+                data_point = {
+                    "id": pid,
+                    "vector": {
+                        "dense": dense_vecs[i],
+                        "sparse_indices": sp_indices,
+                        "sparse_values": sp_values
+                    },
+                    "payload": chunk["payload"]
+                }
+                all_data_points.append(data_point)
+                
+                debug_item = chunk["payload"].copy()
+                debug_item["_vector_text_preview"] = chunk["vector_text"][:200]
+                debug_list.append(debug_item)
             
-            # Sparse 데이터 변환 (TokenID: Weight -> Indices, Values)
-            sp_indices = [int(k) for k in sparse_vecs[i].keys()]
-            sp_values = [float(v) for v in sparse_vecs[i].values()]
-            
-            # 저장할 데이터 구조
-            data_point = {
-                "id": pid,
-                "vector": {
-                    "dense": dense_vecs[i],
-                    "sparse_indices": sp_indices,
-                    "sparse_values": sp_values
-                },
-                "payload": chunk["payload"]
-            }
-            all_data_points.append(data_point)
-            
-            # 디버그용 (벡터 제외)
-            debug_item = chunk["payload"].copy()
-            debug_item["vector_text_preview"] = chunk["vector_text"][:50] + "..."
-            debug_list.append(debug_item)
+            print("완료!")
 
-    # 3. 결과 저장
-    # (1) 적재용 Pickle 저장
+        except Exception as e:
+            print(f"\n[Error] {fname} 처리 중 에러: {e}")
+            continue
+
     with open(OUTPUT_FILE, 'wb') as f:
         pickle.dump(all_data_points, f)
     
-    # (2) 확인용 JSON 저장
     with open(DEBUG_FILE, 'w', encoding='utf-8') as f:
         json.dump(debug_list, f, ensure_ascii=False, indent=2)
 
     print("\n=== [완료 보고] ===")
-    print(f"총 처리된 청크: {len(all_data_points)}개")
-    print(f"적재용 데이터 저장됨: {OUTPUT_FILE}")
-    print(f"검수용 데이터 저장됨: {DEBUG_FILE}")
+    print(f"총 처리된 파일: {total_files}개")
+    print(f"총 생성된 데이터 포인트: {len(all_data_points)}건")
     
     if anomaly_files:
-        print("\n[주의] 다음 파일들은 구조가 예상과 달라 청크가 생성되지 않았습니다:")
+        print("\n[주의] 다음 파일들은 파싱되지 않았습니다:")
         for f in anomaly_files:
             print(f" - {f}")
-    else:
-        print("\n모든 파일이 정상적으로 파싱되었습니다.")
 
 if __name__ == "__main__":
     if not os.path.exists(DATA_DIR):
         os.makedirs(DATA_DIR)
-        print(f"'{DATA_DIR}' 폴더가 없습니다. 생성했습니다.")
+        print(f"'{DATA_DIR}' 폴더가 없습니다.")
     else:
         main()

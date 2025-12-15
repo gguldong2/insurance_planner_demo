@@ -65,22 +65,30 @@ def main():
             payload=item['payload']
         ))
 
-    # 5. 업로드 (배치 처리 권장하지만, 10MB 수준이므로 한 번에 전송)
-    # 데이터가 많으면 batch_size를 조절해서 나눠서 보내야 함 (여기선 100개씩)
+# 5. 업로드 (배치 처리)
     batch_size = 100
-    total_batches = (len(points) + batch_size - 1) // batch_size
+    (배치 처리 권장하지만, 10MB 수준이므로 한 번에 전송)
+    # 데이터가 많으면 batch_size를 조절해서 나눠서 보내야 함 (여기선 100개씩)
+    total_points = len(points)
     
-    print(f"업로드 시작 (총 {len(points)}건)...")
+    print(f"업로드 시작 (총 {total_points}건)...")
     
-    for i in range(0, len(points), batch_size):
+    # [수정 2] len(points) 대신 위에서 만든 total_points 변수 사용
+    for i in range(0, total_points, batch_size):
         batch = points[i : i + batch_size]
         client.upsert(
             collection_name=COLLECTION_NAME,
             points=batch
         )
-        print(f"진행률: {min(i + batch_size, len(points))} / {len(points)} 완료")
+        
+        # [수정 3] 진행률 계산 및 출력
+        current_count = min(i + batch_size, total_points)
+        percent = (current_count / total_points) * 100
+        print(f"[{percent:.1f}%] 적재 진행 중... ({current_count}/{total_points} 건)")
 
     print("\n=== 모든 데이터 적재 완료 ===")
+
+
 
 if __name__ == "__main__":
     main()
