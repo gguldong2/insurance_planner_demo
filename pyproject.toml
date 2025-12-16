@@ -10,28 +10,24 @@ dependencies = [
     "uvicorn==0.34.2",
     "python-dotenv==1.1.0",
     "httpx==0.28.1",
-
     # --- AI & Agent Framework ---
     "langgraph==0.4.8",
     "langchain-core==0.3.60",
     "langchain-openai==0.3.17",
     "langchain-community==0.3.24",
-
     # --- Database Drivers ---
     "psycopg2-binary==2.9.10",
     "sqlalchemy==2.0.41",
-
     # --- Data Validation (Pydantic V2) ---
     "pydantic==2.11.4",
     "pydantic-core==2.33.2",
-
-
     # [추가] Qdrant 벡터 검색용
-        "langchain-qdrant>=0.1.0",
-        "qdrant-client>=1.7.0",
-        "langchain-huggingface>=0.0.3",  # (임베딩 모델용)
-        "sentence-transformers>=2.2.0"  # (보통 자동으로 딸려오지만 안전하게)
-
+    "langchain-qdrant>=0.1.0",
+    "qdrant-client>=1.7.0",
+    "langchain-huggingface>=0.0.3",  # (임베딩 모델용)  # (보통 자동으로 딸려오지만 안전하게)
+    "sentence-transformers>=2.2.0",
+    "flagembedding>=1.3.5",
+    "torch>=2.2.0",
 ]
 
 [build-system]
