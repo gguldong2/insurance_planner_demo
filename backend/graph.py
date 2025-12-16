@@ -6,7 +6,7 @@ from langgraph.graph import StateGraph, END, START
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 # [변경] async 처리가 된 DB 및 Vector 함수 임포트
-from backend.db import execute_query, execute_sql_query 
+from backend.db.db import execute_query, execute_sql_query 
 from backend.vector_store import search_documents 
 from dotenv import load_dotenv
 
@@ -16,20 +16,19 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # [LLM 설정]
-# Async 환경에서도 ChatOpenAI 객체는 동일하게 생성하되, 호출 시 ainvoke를 사용합니다.
-llm = ChatOpenAI(
-    model="gpt-4o", 
-    temperature=0 
-)
-
-#openAI로 테스트 시
+# # Async 환경에서도 ChatOpenAI 객체는 동일하게 생성하되, 호출 시 ainvoke를 사용합니다.
 # llm = ChatOpenAI(
-#     model=os.getenv("OPENAI_MODEL", "gpt-4.1-mini"),  # 기본값 제공
-#     api_key=os.getenv("OPENAI_API_KEY"),
-#     temperature=0.0,
+#     model="gpt-4o", 
+#     temperature=0 
 # )
 
-
+# 로컬 vLLM/Ollama 서버를 바라보도록 설정합니다.
+llm = ChatOpenAI(
+    model=os.getenv("LLM_MODEL_NAME", "Qwen/Qwen3-8B-Instruc"), # .env에서 가져옴
+    api_key="EMPTY",      # 로컬은 키 불필요
+    base_url=os.getenv("LLM_API_BASE", "http://localhost:8000/v1"), # 로컬 API 주소
+    temperature=0
+)
 
 
 
@@ -37,7 +36,7 @@ llm = ChatOpenAI(
 # 2. 상태(State) 정의
 # -------------------------------------------------------------------------
 class AgentState(TypedDict):
-    """
+    """     
     LangGraph 상태 스키마 (이전과 동일)
     """
     question: str
