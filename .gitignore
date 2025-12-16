@@ -46,4 +46,10 @@ Thumbs.db
 .idea/
 .vscode/
 *.swp
-*.swo
+*.swoqdrant_data/
+*.pkl
+Miniconda3-latest-Linux-x86_64.sh
+__pycache__/
+.env
+.venv/
+.venv/
