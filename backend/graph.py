@@ -24,7 +24,7 @@ load_dotenv()
 
 # 로컬 vLLM/Ollama 서버를 바라보도록 설정합니다.
 llm = ChatOpenAI(
-    model=os.getenv("LLM_MODEL_NAME", "Qwen/Qwen3-8B-Instruct"), # .env에서 가져옴
+    model=os.getenv("LLM_MODEL_NAME", "Qwen/Qwen3-8B"), # .env에서 가져옴
     api_key="EMPTY",      # 로컬은 키 불필요
     base_url=os.getenv("LLM_API_BASE", "http://localhost:8000/v1"), # 로컬 API 주소
     temperature=0

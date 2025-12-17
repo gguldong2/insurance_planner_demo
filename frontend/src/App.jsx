@@ -33,7 +33,7 @@ function App() {
     try {
       // Backend API 호출 (FastAPI 포트 확인: 8080)
       // [Python 비유] response = requests.post("...", json={"query": ...})
-      const response = await axios.post("http://localhost:8081/chat", {
+      const response = await axios.post("http://localhost:8080/chat", {
         query: userMsg.text
       });
 
