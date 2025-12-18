@@ -63,16 +63,57 @@ def update_trace(state: AgentState, step: str, detail: str) -> List[str]:
 # -------------------------------------------------------------------------
 # 4. 프롬프트 정의 (분리된 구조)
 # -------------------------------------------------------------------------
-ROUTER_PROMPT = """You are a classification assistant. Classify the user question into one of these three categories:
+#Qwen3-8B용 쿼리(좀 더 구조화해줘야 잘 알아듣는다(추론형))
+ROUTER_PROMPT = """<|im_start|>system
+You are a strict classifier. Your job is to route user inputs into exactly one of two categories: 'vector' or 'general'.
 
-1. 'graph': ONLY for questions about relationships, connections, hierarchy, or network structures between entities.
-2. 'sql': ONLY for questions asking for aggregations, statistics, counts, raw logs, or table data.
-3. 'general': For greetings (hi, hello), self-introduction, questions about the AI itself, or vague questions that don't fit graph/sql.
+### Categories
+1. **vector**:
+   - ALL questions about information, data, facts, or knowledge.
+   - Examples: "What are the scholarship rules?", "How many students?", "Who is the professor?", "Tell me about SeoulTech."
+   - Rule: If the user asks for ANY information, choose 'vector'.
 
-User Question: {question}
+2. **general**:
+   - ONLY for casual greetings or self-introductions.
+   - Examples: "Hi", "Hello", "Who are you?", "Good morning".
 
-Rule: If the question is a simple greeting like "hi" or "hello", YOU MUST output 'general'.
-Output only the keyword (graph, sql, general)."""
+### Output Format
+- Output ONLY the keyword: `vector` or `general`.
+- Do NOT output any other text or punctuation.
+<|im_end|>
+<|im_start|>user
+{question}
+<|im_end|>
+<|im_start|>assistant
+"""
+
+
+# ROUTER_PROMPT = """You are a classification assistant. Classify the user question into one of these two categories:
+
+# 1. 'vector': Use this for ANY question requiring information, knowledge, data, regulations, statistics, or relationships.
+#    - Includes: University regulations, specific rules, database queries, relationship checks, counting, or raw data retrieval.
+#    - If the user asks about SeoulTech rules, relationships, or statistics, ALWAYS output 'vector'.
+
+# 2. 'general': ONLY for greetings (hi, hello), self-introductions, or questions about the AI assistant itself.
+
+# User Question: {question}
+
+# Rule: If it's not a simple greeting, default to 'vector'.
+# Output only the keyword (vector, general)."""
+
+
+
+
+# ROUTER_PROMPT = """You are a classification assistant. Classify the user question into one of these three categories:
+
+# 1. 'graph': ONLY for questions about relationships, connections, hierarchy, or network structures between entities.
+# 2. 'sql': ONLY for questions asking for aggregations, statistics, counts, raw logs, or table data.
+# 3. 'general': For greetings (hi, hello), self-introduction, questions about the AI itself, or vague questions that don't fit graph/sql.
+
+# User Question: {question}
+
+# Rule: If the question is a simple greeting like "hi" or "hello", YOU MUST output 'general'.
+# Output only the keyword (graph, sql, general)."""
 
 CYPHER_GEN_PROMPT = """You are a Cypher expert.
 Schema: {schema}
@@ -91,11 +132,53 @@ Schema: {schema}
 Query: {query}
 Return JSON: {{"valid": bool, "reason": str}}"""
 
-SUMMARIZER_PROMPT = """Answer based on Context and DB Result.
-Context: {c}
-DB Result: {r}
-Question: {q}
+# graph.py 의 SUMMARIZER_PROMPT 변수를 통째로 교체하세요.
+
+
+
+#Qwen3-8B용 쿼리(좀 더 구조화해줘야 잘 알아듣는다(추론형))
+SUMMARIZER_PROMPT = """<|im_start|>system
+You are a helpful and factual assistant for Seoul National University of Science and Technology (SeoulTech).
+Answer the user's question using ONLY the provided [Context] and [DB Result].
+
+### Instructions
+1. **Search First:** Look for the answer in the [Context] or [DB Result] below.
+2. **Strict Grounding:** If the answer is NOT in the provided text, respond exactly with: "제공된 정보(규정 및 데이터) 내에서 관련 내용을 찾을 수 없습니다."
+3. **No Fabrication:** Do NOT make up URLs, phone numbers, or facts. Do NOT use outside knowledge.
+4. **Language:** Answer in Korean.
+
+### [Context]
+{c}
+
+### [DB Result]
+{r}
+<|im_end|>
+<|im_start|>user
+{q}
+<|im_end|>
+<|im_start|>assistant
 """
+
+
+# SUMMARIZER_PROMPT = """You are a strictly factual assistant for Seoul National University of Science and Technology (SeoulTech).
+# Your task is to answer the user's question based **ONLY** on the provided 'Context' and 'DB Result'.
+
+# ### Context (Retrieved Documents):
+# {c}
+
+# ### DB Result (Structured Data):
+# {r}
+
+# ### Question:
+# {q}
+
+# ### *** STRICT RESPONSE RULES ***
+# 1. **Grounding:** You must answer using *only* the information explicitly present in the 'Context' or 'DB Result' above.
+# 2. **No Hallucination:** - NEVER invent URLs, phone numbers, or email addresses. If it's not in the text, do not generate it. (e.g., do not give a Sungkyunkwan URL for SeoulTech).
+#    - If the provided Context/DB Result does not contain enough information to answer the question, you MUST say: "제공된 정보(규정 및 데이터) 내에서 관련 내용을 찾을 수 없습니다."
+# 3. **Prioritize Context:** Use the 'Context' primarily for regulations/rules queries. Use 'DB Result' for statistics/counts queries.
+# 4. **Tone:** Professional, objective, and concise. Answer in **Korean**.
+# """
 
 # -------------------------------------------------------------------------
 # 5. [Async] 노드 정의
