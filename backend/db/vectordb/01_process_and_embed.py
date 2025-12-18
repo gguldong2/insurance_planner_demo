@@ -946,8 +946,21 @@ class RegulationParser:
         return {"filename": filename, "chunks": chunks}
 
 def generate_id(filename, article_title):
-    title_part = article_title if article_title else "general_text"
-    unique_str = f"{filename}_{title_part}"
+    """
+    ID 생성 시 충돌 방지를 위해 메타데이터와 본문 일부를 조합하여 해시를 생성합니다.
+    None 값은 빈 문자열로 처리합니다.
+    """
+    # None 타입 안전 처리
+    safe_filename = str(filename) if filename else ""
+    safe_chapter = str(chapter) if chapter else ""
+    safe_section = str(section) if section else ""
+    safe_article = str(article) if article else "general" # 조항 없으면 general
+    safe_content_preview = content[:100] if content else "" # 본문 앞 100자만 사용
+
+    # 구분자(_)로 연결
+    unique_str = f"{safe_filename}_{safe_chapter}_{safe_section}_{safe_article}_{safe_content_preview}"
+    
+    # MD5 해시 생성
     hash_obj = hashlib.md5(unique_str.encode('utf-8'))
     return str(uuid.UUID(hex=hash_obj.hexdigest()))
 
@@ -985,7 +998,18 @@ def main():
             sparse_vecs = output['lexical_weights']
 
             for i, chunk in enumerate(chunks):
-                pid = generate_id(fname, chunk['payload']['article'])
+                # payload에서 필요한 정보 추출
+                payload = chunk['payload']
+
+                #hash값 만들 때 들어가는 데이터 수정
+                pid = generate_id(
+                    filename=fname,
+                    chapter=payload.get('chapter'),
+                    section=payload.get('section'),
+                    article=payload.get('article'),
+                    content=payload.get('content')
+                )
+                
                 sp_indices = [int(k) for k in sparse_vecs[i].keys()]
                 sp_values = [float(v) for v in sparse_vecs[i].values()]
                 
