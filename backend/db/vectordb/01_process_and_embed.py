@@ -713,14 +713,10 @@ class RegulationParser:
         self.pat_section = re.compile(r'^\s*\*\*(제\s*\d+\s*절.*)\*\*')
         self.pat_article = re.compile(r'^\s*###\s+(제\s*\d+\s*조.*)')
         
-        # 2. [수정] 부칙 패턴 (부 칙, **부칙**, 부칙(날짜), 부 칙<호수> 등 모두 대응)
-        # ^(시작), (공백), (**)?(볼드), 부(공백)칙, (나머지 전체)
+        # 2. 부칙 패턴 (부 칙, **부칙**, 부칙(날짜) 등)
         self.pat_addenda_header = re.compile(r'^\s*(\*\*)?부\s*칙.*')
         
-        # 3. 부칙 내 조항 (제1조, 제 1 조 등)
-        # [수정 전]
-        # self.pat_addenda_article = re.compile(r'^\s*(제\s*\d+\s*조.*)')
-        # [수정 후] #이 1개 이상 오거나, 없거나 모두 허용
+        # 3. 부칙 내 조항 (제1조, 제 1 조 등) - # 유무 관계없이 잡음
         self.pat_addenda_article = re.compile(r'^\s*(#+)?\s*(제\s*\d+\s*조.*)')
 
         # 4. 별표 패턴
@@ -792,6 +788,9 @@ class RegulationParser:
         current_chunk = {"title": None, "lines": []}
         chunks = []
         
+        # -------------------------------------------------------
+        # [핵심 수정 함수] save_chunk
+        # -------------------------------------------------------
         def save_chunk():
             if not current_chunk["lines"]: return
             content_raw = "\n".join(current_chunk["lines"]).strip()
@@ -801,38 +800,45 @@ class RegulationParser:
             final_section = state["section"]
             final_article = current_chunk["title"]
             
-            # [로직 수정] 부칙/별표 모드 처리
+            # 모드별 챕터/섹션 보정
             if state["mode"] == "addenda":
                 final_chapter = "부칙"
-                # Section은 이미 파싱 루프에서 "부칙(제389호...)" 형태로 state에 저장됨
-                
-                # Article 처리 (None이면 null)
                 if final_article == "__General__" or not final_article:
                     final_article = None 
-            
             elif state["mode"] == "appendix":
                 final_chapter = "별표"
                 final_section = "별표"
-                # 별표는 title이 곧 article ([별표 1]...)
 
-            # Content 구성
+            # ---------------------------------------------------------
+            # 1. 경로(Path) 문자열 먼저 생성 (이전보다 위로 이동)
+            # ---------------------------------------------------------
+            path_parts = [doc_title]
+            if final_chapter: 
+                path_parts.append(final_chapter)
+            if final_section and final_section != final_chapter: 
+                path_parts.append(final_section)
+            
+            path_str = " > ".join(path_parts)
+
+            # ---------------------------------------------------------
+            # 2. LLM용 Content 구성 (경로 헤더 추가)
+            #    예: [출처: 학칙 > 제1장 총칙] \n ### 제1조...
+            # ---------------------------------------------------------
             payload_content = ""
+            header_str = f"[출처: {path_str}]" # ★ 여기에 경로를 박아넣음
+
             if final_article:
                 if state["mode"] == "appendix":
-                     payload_content = f"### {final_article}\n{content_raw}"
+                     payload_content = f"{header_str}\n### {final_article}\n{content_raw}"
                 elif state["mode"] == "addenda":
-                     # 부칙 조항은 ### 없이 "제1조(시행일)" 텍스트로 시작
-                     # 내용에 이미 포함되어 있는지 확인 후 붙임
                      if content_raw.startswith(final_article):
-                         payload_content = content_raw
+                         payload_content = f"{header_str}\n{content_raw}"
                      else:
-                         payload_content = f"{final_article}\n{content_raw}"
+                         payload_content = f"{header_str}\n{final_article}\n{content_raw}"
                 else:
-                     # 일반 조항
-                     payload_content = f"### {final_article}\n{content_raw}"
+                     payload_content = f"{header_str}\n### {final_article}\n{content_raw}"
             else:
-                # Article이 없는 경우 (부칙 단순 텍스트)
-                payload_content = content_raw
+                payload_content = f"{header_str}\n{content_raw}"
 
             payload = {
                 "doc_title": doc_title,
@@ -842,20 +848,12 @@ class RegulationParser:
                 "chapter": final_chapter,
                 "section": final_section,
                 "article": final_article, 
-                "content": payload_content
+                "content": payload_content # ★ 경로가 포함된 내용 저장
             }
             
-            # [Vector Text 경로 구성]
-            path_parts = [doc_title]
-            if final_chapter: path_parts.append(final_chapter)
-            
-            # Section 중복 방지: Chapter와 Section이 글자까지 똑같으면(예: "부칙" > "부칙") 생략
-            # 하지만 "부칙" > "부칙(제389호...)" 처럼 다르면 포함
-            if final_section and final_section != final_chapter: 
-                path_parts.append(final_section)
-            
-            path_str = " > ".join(path_parts)
-            
+            # ---------------------------------------------------------
+            # 3. Vector용 Text 구성 (검색용)
+            # ---------------------------------------------------------
             if final_article:
                 vector_text = f"{path_str} > {final_article} :\n{content_raw}"
             else:
@@ -873,69 +871,50 @@ class RegulationParser:
             current_chunk["lines"] = []
 
 
+        # 본문 파싱 루프
         while line_idx < len(lines):
             line = lines[line_idx].rstrip()
             stripped = line.strip()
             
-            # 1. 별표
             if self.pat_appendix.match(stripped):
                 save_chunk()
                 state["mode"] = "appendix"
                 state["chapter"] = "별표"
                 state["section"] = "별표"
                 match = self.pat_appendix.match(stripped)
-                current_chunk["title"] = match.group(2) # [별표 1]...
+                current_chunk["title"] = match.group(2)
 
-            # 2. [수정] 부칙 헤더 (여기서 구체적인 텍스트를 Section으로 잡음)
             elif self.pat_addenda_header.match(stripped):
                 save_chunk()
                 state["mode"] = "addenda"
                 state["chapter"] = "부칙"
-                
-                # "부칙", "**부칙**", "부 칙<...>" 등 헤더 텍스트 전체를 가져옴
-                # 단, **부칙** 처럼 볼드가 있으면 제거해서 깔끔하게 만듦
                 raw_header = stripped.replace("**", "").strip()
-                # "부 칙" 처럼 중간 공백이 있는 경우 정규화하고 싶다면 여기서 처리
-                # 예: "부 칙" -> "부칙" (선택사항, 지금은 원본 유지하되 볼드만 제거)
                 state["section"] = raw_header
-                
-                # title 초기화 (아직 조항 안 나옴)
                 current_chunk["title"] = None
 
-            # 3. 부칙 내 조항
-            # [부칙 테그 없는 거 못 잡는 거 수정] - parse_file 메서드 내부 while 루프 안
             elif state["mode"] == "addenda" and self.pat_addenda_article.match(stripped):
                 save_chunk()
-                # 정규식 앞부분에 (#+)? 그룹이 추가되었으므로, 제목은 group(2)가 됩니다.
                 current_chunk["title"] = self.pat_addenda_article.match(stripped).group(2)
-                
-                # (선택 사항) 만약 '### 제1조(시행일) 내용...' 처럼 한 줄에 내용까지 있다면
-                # 아래 코드를 추가하여 내용 유실을 방지합니다. 
-                # 제목만 있는 줄이라면 굳이 lines에 넣지 않아도 됩니다(save_chunk에서 처리함).
                 if not stripped.startswith("###"): 
                     current_chunk["lines"].append(line)
 
-            # 4. 일반 Chapter
             elif self.pat_chapter.match(stripped):
                 save_chunk()
                 state["mode"] = "normal"
                 state["chapter"] = self.pat_chapter.match(stripped).group(1)
                 state["section"] = None
 
-            # 5. 일반 Section
             elif state["mode"] == "normal" and self.pat_section.match(stripped):
                 save_chunk()
                 state["section"] = self.pat_section.match(stripped).group(1)
 
-            # 6. 일반 Article
             elif state["mode"] == "normal" and self.pat_article.match(stripped):
                 save_chunk()
                 current_chunk["title"] = self.pat_article.match(stripped).group(1)
 
-            # 7. 내용 누적
             else:
                 if state["mode"] == "addenda" and current_chunk["title"] is None:
-                    current_chunk["title"] = "__General__" # 임시 마커
+                    current_chunk["title"] = "__General__"
                     current_chunk["lines"].append(line)
                 elif current_chunk["title"] or state["mode"] == "appendix":
                     current_chunk["lines"].append(line)
@@ -945,25 +924,27 @@ class RegulationParser:
         save_chunk()
         return {"filename": filename, "chunks": chunks}
 
-def generate_id(filename, article_title):
+# ==========================================
+# [ID 생성기] - 메타데이터 기반 해시 생성
+# ==========================================
+def generate_id(filename, chapter, section, article, content):
     """
     ID 생성 시 충돌 방지를 위해 메타데이터와 본문 일부를 조합하여 해시를 생성합니다.
-    None 값은 빈 문자열로 처리합니다.
     """
-    # None 타입 안전 처리
     safe_filename = str(filename) if filename else ""
     safe_chapter = str(chapter) if chapter else ""
     safe_section = str(section) if section else ""
-    safe_article = str(article) if article else "general" # 조항 없으면 general
-    safe_content_preview = content[:100] if content else "" # 본문 앞 100자만 사용
+    safe_article = str(article) if article else "general"
+    safe_content_preview = content[:100] if content else "" 
 
-    # 구분자(_)로 연결
     unique_str = f"{safe_filename}_{safe_chapter}_{safe_section}_{safe_article}_{safe_content_preview}"
     
-    # MD5 해시 생성
     hash_obj = hashlib.md5(unique_str.encode('utf-8'))
     return str(uuid.UUID(hex=hash_obj.hexdigest()))
 
+# ==========================================
+# [메인 실행]
+# ==========================================
 def main():
     print("=== [Step 1] 파싱 및 임베딩 시작 ===")
     try:
@@ -998,10 +979,9 @@ def main():
             sparse_vecs = output['lexical_weights']
 
             for i, chunk in enumerate(chunks):
-                # payload에서 필요한 정보 추출
                 payload = chunk['payload']
 
-                #hash값 만들 때 들어가는 데이터 수정
+                # ID 생성 (경로가 포함된 payload['content'] 사용)
                 pid = generate_id(
                     filename=fname,
                     chapter=payload.get('chapter'),
@@ -1047,5 +1027,6 @@ def main():
 if __name__ == "__main__":
     if not os.path.exists(DATA_DIR):
         os.makedirs(DATA_DIR)
+        print(f"'{DATA_DIR}' 폴더가 없습니다.")
     else:
         main()
