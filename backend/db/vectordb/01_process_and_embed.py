@@ -718,7 +718,10 @@ class RegulationParser:
         self.pat_addenda_header = re.compile(r'^\s*(\*\*)?부\s*칙.*')
         
         # 3. 부칙 내 조항 (제1조, 제 1 조 등)
-        self.pat_addenda_article = re.compile(r'^\s*(제\s*\d+\s*조.*)')
+        # [수정 전]
+        # self.pat_addenda_article = re.compile(r'^\s*(제\s*\d+\s*조.*)')
+        # [수정 후] #이 1개 이상 오거나, 없거나 모두 허용
+        self.pat_addenda_article = re.compile(r'^\s*(#+)?\s*(제\s*\d+\s*조.*)')
 
         # 4. 별표 패턴
         self.pat_appendix = re.compile(r'^\s*(#+)?\s*(\[별표.*)')
@@ -900,9 +903,17 @@ class RegulationParser:
                 current_chunk["title"] = None
 
             # 3. 부칙 내 조항
+            # [부칙 테그 없는 거 못 잡는 거 수정] - parse_file 메서드 내부 while 루프 안
             elif state["mode"] == "addenda" and self.pat_addenda_article.match(stripped):
                 save_chunk()
-                current_chunk["title"] = self.pat_addenda_article.match(stripped).group(1)
+                # 정규식 앞부분에 (#+)? 그룹이 추가되었으므로, 제목은 group(2)가 됩니다.
+                current_chunk["title"] = self.pat_addenda_article.match(stripped).group(2)
+                
+                # (선택 사항) 만약 '### 제1조(시행일) 내용...' 처럼 한 줄에 내용까지 있다면
+                # 아래 코드를 추가하여 내용 유실을 방지합니다. 
+                # 제목만 있는 줄이라면 굳이 lines에 넣지 않아도 됩니다(save_chunk에서 처리함).
+                if not stripped.startswith("###"): 
+                    current_chunk["lines"].append(line)
 
             # 4. 일반 Chapter
             elif self.pat_chapter.match(stripped):
