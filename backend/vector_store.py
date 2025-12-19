@@ -23,7 +23,7 @@ print(f"🚀 Embedding Device: {device}")
 load_dotenv()
 
 QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
-COLLECTION_NAME = os.getenv("QDRANT_COLLECTION_NAME", "my_knowledge_base")
+COLLECTION_NAME = os.getenv("QDRANT_COLLECTION_NAME", "seoultech_regulations")
 
 
 # embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
