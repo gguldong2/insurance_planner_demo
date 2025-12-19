@@ -1,5 +1,6 @@
 import os
 import json
+import re
 import asyncio
 from typing import TypedDict, List, Dict, Any, Optional
 from langgraph.graph import StateGraph, END, START
@@ -59,6 +60,19 @@ def update_trace(state: AgentState, step: str, detail: str) -> List[str]:
     """로그 업데이트 (CPU 연산이므로 동기 함수 유지)"""
     log = state.get("trace_log", []) or []
     return list(log) + [f"[{step}] {detail}"]
+
+
+# -------------------------------------------------------------------------
+# [Helper] Think 태그 제거 함수
+# -------------------------------------------------------------------------
+def remove_think_tag(text: str) -> str:
+    """
+    <think>...</think> 태그와 그 내용을 제거하여 순수 응답만 반환합니다.
+    Flags=re.DOTALL: 줄바꿈이 포함된 내용도 한 번에 매칭
+    """
+    if not text: return ""
+    return re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL).strip()
+
 
 # -------------------------------------------------------------------------
 # 4. 프롬프트 정의 (분리된 구조)
@@ -194,18 +208,18 @@ The provided [Context] consists of university regulations.
 # 4. **Tone:** Professional, objective, and concise. Answer in **Korean**.
 # """
 
+## -------------------------------------------------------------------------
+# 5. [Async] 노드 정의 (Think 태그 제거(llm생성 시) 적용)
 # -------------------------------------------------------------------------
-# 5. [Async] 노드 정의
-# -------------------------------------------------------------------------
-# 모든 노드 함수 앞에 'async' 키워드가 붙습니다.
 
 async def node_router(state: AgentState):
-    """[Router] LLM을 비동기 호출하여 모드를 결정합니다."""
+    """[Router] <think> 제거 후 키워드만 추출"""
     chain = ChatPromptTemplate.from_template(ROUTER_PROMPT) | llm
     try:
-        # [변경] invoke -> ainvoke (await 필수)
         res = await chain.ainvoke({"question": state["question"]})
-        decision = res.content.strip().lower()
+        # [적용]
+        clean_content = remove_think_tag(res.content)
+        decision = clean_content.strip().lower()
     except:
         decision = "general"
     
@@ -217,16 +231,10 @@ async def node_router(state: AgentState):
     return {"mode": mode, "trace_log": update_trace(state, "Router", f"Mode: {mode}")}
 
 async def node_retriever(state: AgentState):
-    """[Retriever] 비동기 Vector DB 검색을 수행합니다."""
+    """[Retriever] LLM 미사용 -> Think 제거 불필요"""
     query = state["question"]
-
-    # 1. vector_store.py에서 가져온 함수 실행
-    # search_documents가 async 함수이므로 await 사용
     docs = await search_documents(query, k=3)
     
-
-    # 2. 로그에 보여줄 내용 정리 (문서 내용이 있으면 앞부분만 잘라서 보여줌)
-    # docs가 문자열 리스트인지 Document 객체 리스트인지에 따라 처리
     if docs and hasattr(docs[0], 'page_content'):
         doc_preview = ", ".join([d.page_content[:20] + "..." for d in docs])
     else:
@@ -239,17 +247,19 @@ async def node_retriever(state: AgentState):
         }
 
 async def node_gen_graph(state: AgentState):
-    """[Gen Graph] Cypher 쿼리 비동기 생성"""
+    """[Gen Graph] <think> 제거 후 Cypher 코드만 추출"""
     schema = state["graph_schema"]
     feedback = state.get("evaluation", {}).get("reason", "")
     
     chain = ChatPromptTemplate.from_template(CYPHER_GEN_PROMPT) | llm
-    # [변경] ainvoke
     response = await chain.ainvoke({
         "schema": schema, "feedback": feedback, "question": state["question"]
     })
     
-    query = response.content.strip().replace("```cypher", "").replace("```", "")
+    # [적용]
+    clean_content = remove_think_tag(response.content)
+    query = clean_content.strip().replace("```cypher", "").replace("```", "")
+    
     return {
         "generated_query": query,
         "retry_count": state.get("retry_count", 0) + 1,
@@ -257,17 +267,19 @@ async def node_gen_graph(state: AgentState):
     }
 
 async def node_gen_sql(state: AgentState):
-    """[Gen SQL] SQL 쿼리 비동기 생성"""
+    """[Gen SQL] <think> 제거 후 SQL 코드만 추출"""
     schema = state["sql_schema"]
     feedback = state.get("evaluation", {}).get("reason", "")
     
     chain = ChatPromptTemplate.from_template(SQL_GEN_PROMPT) | llm
-    # [변경] ainvoke
     response = await chain.ainvoke({
         "schema": schema, "feedback": feedback, "question": state["question"]
     })
     
-    query = response.content.strip().replace("```sql", "").replace("```", "")
+    # [적용]
+    clean_content = remove_think_tag(response.content)
+    query = clean_content.strip().replace("```sql", "").replace("```", "")
+    
     return {
         "generated_query": query,
         "retry_count": state.get("retry_count", 0) + 1,
@@ -275,22 +287,28 @@ async def node_gen_sql(state: AgentState):
     }
 
 async def node_critic(state: AgentState):
-    """[Critic] 비동기 검증"""
+    """[Critic] <think> 제거 후 JSON 파싱"""
     mode = state["mode"]
     schema = state["graph_schema"] if mode == "graph" else state["sql_schema"]
     
     chain = ChatPromptTemplate.from_template(CRITIC_PROMPT) | llm
     try:
-        # [변경] ainvoke
         res = await chain.ainvoke({
             "mode": "Cypher" if mode == "graph" else "SQL", 
             "schema": schema, "query": state["generated_query"]
         })
-        content = res.content.strip()
-        if content.startswith("```json"): content = content[7:-3]
-        eval_result = json.loads(content)
+        # [적용]
+        clean_content = remove_think_tag(res.content)
+        
+        # 마크다운 코드블록 제거 (혹시 남아있을 경우)
+        if clean_content.startswith("```json"): 
+            clean_content = clean_content[7:]
+        if clean_content.endswith("```"):
+            clean_content = clean_content[:-3]
+            
+        eval_result = json.loads(clean_content.strip())
     except:
-        eval_result = {"valid": True, "reason": "Parsing failed"}
+        eval_result = {"valid": True, "reason": "Parsing failed (Default Valid)"}
     
     return {
         "evaluation": eval_result,
@@ -298,13 +316,11 @@ async def node_critic(state: AgentState):
     }
 
 async def node_executor(state: AgentState):
-    """[Executor] 비동기 DB 실행 (db.py에서 Thread로 실행됨)"""
+    """[Executor] LLM 미사용 -> Think 제거 불필요"""
     try:
         if state["mode"] == "graph":
-            # [변경] await execute_query
             res = await execute_query(state["generated_query"])
         else:
-            # [변경] await execute_sql_query
             res = await execute_sql_query(state["generated_query"])
         
         return {
@@ -319,31 +335,32 @@ async def node_executor(state: AgentState):
         }
 
 async def node_summarizer(state: AgentState):
-    """[Summarizer] 최종 답변 생성"""
+    """[Summarizer] <think> 제거 후 최종 답변 제공"""
     chain = ChatPromptTemplate.from_template(SUMMARIZER_PROMPT) | llm
     
     db_res = state.get("query_result", "N/A")
     docs = state.get("context", [])
     doc_text = "\n".join(docs) if docs else "No docs"
     
-    # [변경] ainvoke
     ans = await chain.ainvoke({
         "q": state["question"], "r": db_res, "c": doc_text
     })
     
-    return {"final_answer": ans.content}
+    # [적용]
+    final_clean = remove_think_tag(ans.content)
+    
+    return {"final_answer": final_clean}
 
 async def node_general(state: AgentState):
-    """[General] 비동기 잡담"""
-    # [변경] ainvoke
+    """[General] <think> 제거 후 잡담 응답"""
     ans = await llm.ainvoke(state["question"])
-    return {"final_answer": ans.content}
+    # [적용]
+    final_clean = remove_think_tag(ans.content)
+    
+    return {"final_answer": final_clean}
 
 async def node_fail(state: AgentState):
-    """
-    [Fail] 에러 구분 로직 (요청하신 기능 반영)
-    async 함수여야 LangGraph가 await로 호출할 수 있습니다.
-    """
+    """[Fail] LLM 미사용 -> Think 제거 불필요"""
     error_msg = state.get("error")
     retry_cnt = state.get("retry_count", 0)
     
