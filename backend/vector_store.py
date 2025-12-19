@@ -15,6 +15,10 @@ from qdrant_client.http.models import Distance, VectorParams
 from dotenv import load_dotenv
 
 
+import torch # torch 임포트 필요
+device = "cuda" if torch.cuda.is_available() else "cpu"
+print(f"🚀 Embedding Device: {device}")
+
 
 load_dotenv()
 
@@ -25,7 +29,8 @@ COLLECTION_NAME = os.getenv("QDRANT_COLLECTION_NAME", "my_knowledge_base")
 # embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
 # [변경] 한국어 성능이 좋은 로컬 모델로 설정
 embeddings = HuggingFaceEmbeddings(
-    model_name="nlpai-lab/KURE-v1",
+    model_name="BAAI/bge-m3",
+    model_kwargs={'device': device}, # 동적 할당
     encode_kwargs={"normalize_embeddings": True},
 )
 
