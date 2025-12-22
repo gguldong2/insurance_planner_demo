@@ -334,22 +334,66 @@ async def node_executor(state: AgentState):
             "trace_log": update_trace(state, "Executor", f"DB Error: {e}")
         }
 
+# async def node_summarizer(state: AgentState):
+#     """[Summarizer] <think> 제거 후 최종 답변 제공"""
+#     chain = ChatPromptTemplate.from_template(SUMMARIZER_PROMPT) | llm
+    
+#     db_res = state.get("query_result", "N/A")
+#     docs = state.get("context", [])
+#     doc_text = "\n".join(docs) if docs else "No docs"
+    
+#     ans = await chain.ainvoke({
+#         "q": state["question"], "r": db_res, "c": doc_text
+#     })
+    
+#     # [적용]
+#     final_clean = remove_think_tag(ans.content)
+    
+#     return {"final_answer": final_clean}
+
 async def node_summarizer(state: AgentState):
     """[Summarizer] <think> 제거 후 최종 답변 제공"""
+    print("DEBUG: Summarizer Node Entered", flush=True) # [디버깅]
+    
     chain = ChatPromptTemplate.from_template(SUMMARIZER_PROMPT) | llm
     
     db_res = state.get("query_result", "N/A")
     docs = state.get("context", [])
-    doc_text = "\n".join(docs) if docs else "No docs"
     
-    ans = await chain.ainvoke({
-        "q": state["question"], "r": db_res, "c": doc_text
-    })
+    # [수정] SimpleDocument 객체 리스트를 문자열로 변환하는 로직 추가
+    if docs:
+        # docs가 SimpleDocument 객체 리스트인 경우 처리
+        doc_texts = []
+        for d in docs:
+            if hasattr(d, 'page_content'):
+                # 출처(제목)와 내용을 같이 넣어주면 LLM 답변이 더 정확해집니다.
+                title = d.metadata.get('doc_title', '문서')
+                content = d.page_content
+                doc_texts.append(f"======\n[출처: {title}]\n{content}\n======")
+            else:
+                # 만약 그냥 문자열이라면 그대로 추가
+                doc_texts.append(str(d))
+        doc_text = "\n".join(doc_texts)
+    else:
+        doc_text = "No docs"
     
-    # [적용]
-    final_clean = remove_think_tag(ans.content)
-    
-    return {"final_answer": final_clean}
+    # 디버깅용: 프롬프트에 들어갈 텍스트 길이 확인
+    print(f"DEBUG: Context Length sent to LLM: {len(doc_text)} chars", flush=True)
+
+    try:
+        ans = await chain.ainvoke({
+            "q": state["question"], "r": db_res, "c": doc_text
+        })
+        
+        # [적용]
+        final_clean = remove_think_tag(ans.content)
+        return {"final_answer": final_clean}
+
+    except Exception as e:
+        print(f"DEBUG: Summarizer LLM Error: {e}", flush=True)
+        return {"final_answer": "죄송합니다. 답변을 생성하는 도중 오류가 발생했습니다.", "error": str(e)}
+
+
 
 async def node_general(state: AgentState):
     """[General] <think> 제거 후 잡담 응답"""

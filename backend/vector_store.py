@@ -209,7 +209,7 @@ async def search_documents(query: str, k: int = 3):
         print(f"   • Dense Raw: {len(raw_dense_points)} (Cut by 0.7: {cut_count})")
         print(f"   • Dense Valid: {len(filtered_dense)}")
         print(f"   • Sparse Valid: {len(raw_sparse_points)}")
-        print(f"   • Overlap: Both({both_cnt}), Dense({dense_only_cnt}), Sparse({sparse_only_cnt})")
+        print(f"   • Overlap: Both({both_cnt}), Dense_only({dense_only_cnt}), Sparse_only({sparse_only_cnt})")
         print("-" * 60)
 
         if total_candidates == 0:
