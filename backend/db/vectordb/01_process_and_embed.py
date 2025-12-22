@@ -935,7 +935,7 @@ def generate_id(filename, chapter, section, article, content):
     safe_chapter = str(chapter) if chapter else ""
     safe_section = str(section) if section else ""
     safe_article = str(article) if article else "general"
-    safe_content_preview = content[:150] if content else "" 
+    safe_content_preview = content[:200] if content else "" 
 
     unique_str = f"{safe_filename}_{safe_chapter}_{safe_section}_{safe_article}_{safe_content_preview}"
     
