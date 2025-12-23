@@ -1005,6 +1005,7 @@ def main():
                 all_data_points.append(data_point)
                 
                 debug_item = chunk["payload"].copy()
+                debug_item["id"] = pid  
                 debug_item["_vector_text_preview"] = chunk["vector_text"][:200]
                 debug_list.append(debug_item)
             
