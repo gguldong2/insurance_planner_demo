@@ -35,6 +35,10 @@ dependencies = [
     
     # [추가] Local LLM Server (Linux/WSL Only)
     "vllm>=0.6.3", 
+
+    # [추가]
+    "langsmith>=0.1.0",
+    "ragas>=0.1.0",
 ]
 
 [build-system]

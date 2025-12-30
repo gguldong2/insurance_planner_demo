@@ -87,7 +87,8 @@ async def chat_endpoint(req: ChatRequest):
         
         return ChatResponse(
             answer=result.get("final_answer", "No answer"),
-            logs=result.get("trace_log", [])
+            # logs=result.get("trace_log", [])
+            logs=logs[-10:]   # ✅ 마지막 10줄만
         )
     except Exception as e:
         import traceback

@@ -63,12 +63,30 @@ class AgentState(TypedDict):
 # -------------------------------------------------------------------------
 # 3. Helper 함수
 # -------------------------------------------------------------------------
-def update_trace(state: AgentState, step: str, detail: str) -> List[str]:
+
+MAX_TRACE_LINES = 30
+
+def update_trace(state: AgentState, node: str, msg: str) -> List[str]:
     """로그 업데이트 (CPU 연산이므로 동기 함수 유지)"""
-    log = state.get("trace_log", []) or []
-    return list(log) + [f"[{step}] {detail}"]
+    """
+    trace_log는 요청마다 계속 누적되니까 운영에서
+    응답 payload가 커지고(특히 logs를 그대로 반환하면 더 커짐)
+    저장/전송 비용도 늘고
+    로그에 문서 내용이 섞이면 보안/PII 리스크가 생김
+    반면, 디테일한 건 LangSmith trace에서 이미 다 보이니 trace_log는 **“인간이 한눈에 보는 요약”**만 남기는 게 운영 안정성에 좋음.
+    """
+    trace = list(state.get("trace_log", []) or [])
+    # 긴 본문/개행은 잘라서 1줄 요약으로
+    msg = (msg or "").replace("\n", " ")
+    if len(msg) > 200:
+        msg = msg[:200] + "…"
+    trace.append(f"[{node}] {msg}")
 
+    # ✅ 마지막 N줄만 유지
+    if len(trace) > MAX_TRACE_LINES:
+        trace = trace[-MAX_TRACE_LINES:]
 
+    return trace
 # -------------------------------------------------------------------------
 # [Helper] Think 태그 제거 함수
 # -------------------------------------------------------------------------
