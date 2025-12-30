@@ -58,9 +58,14 @@ async def chat_endpoint(req: ChatRequest):
             "question": req.query,
             "graph_schema": req.graph_schema,
             "sql_schema": req.sql_schema,
-            "mode": "",
+            "mode": "vector",
+            "generated_query": "",
+            "query_result": "",
+            "context": [],
+            "evaluation": {},
+            "final_answer": "",
             "retry_count": 0,
-            "trace_log": []
+            "trace_log": [],
         }
         
         result = await app_graph.ainvoke(inputs)  #비동기(LangGraph의 비동기 실행 메서드)

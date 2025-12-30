@@ -52,6 +52,8 @@ class AgentState(TypedDict):
     retry_count: int
     error: Optional[str]            # 실행 에러 메시지
     trace_log: List[str]
+    retrieved_docs: List[Dict[str, Any]]  # ✅ 평가/모니터링용(구조화)
+    node_models: Dict[str, str]           # ✅ 노드별 모델 기록(추후 확장 대비)
 
 # -------------------------------------------------------------------------
 # 3. Helper 함수
@@ -230,21 +232,70 @@ async def node_router(state: AgentState):
     
     return {"mode": mode, "trace_log": update_trace(state, "Router", f"Mode: {mode}")}
 
+
+
+########################################################################
+########################################################################
+########### LangSmith & RAGAS 달기 전 #########
+
+# async def node_retriever(state: AgentState):
+#     """[Retriever] LLM 미사용 -> Think 제거 불필요"""
+#     query = state["question"]
+#     docs = await search_documents(query, k=3)
+    
+#     if docs and hasattr(docs[0], 'page_content'):
+#         doc_preview = ", ".join([d.page_content[:20] + "..." for d in docs])
+#     else:
+#         doc_preview = str(docs)[:50]
+    
+#     return {
+#             "context": docs,
+#             "query_result": "N/A (Vector Mode)",
+#             "trace_log": update_trace(state, "Retriever", f"Found {len(docs)} docs: {doc_preview}")
+#         }
+
+############ LangSmith & RAGAS용 ###########
+
 async def node_retriever(state: AgentState):
-    """[Retriever] LLM 미사용 -> Think 제거 불필요"""
+    """[Retriever] Vector 검색 → (1) LLM용 context 텍스트 (2) 평가용 구조화 docs 저장"""
     query = state["question"]
     docs = await search_documents(query, k=3)
-    
-    if docs and hasattr(docs[0], 'page_content'):
-        doc_preview = ", ".join([d.page_content[:20] + "..." for d in docs])
-    else:
-        doc_preview = str(docs)[:50]
-    
+
+    # LLM 프롬프트에 넣을 텍스트 리스트
+    context_texts: List[str] = []
+    # 평가/모니터링용 구조화 리스트
+    retrieved_docs: List[Dict[str, Any]] = []
+
+    for rank, d in enumerate(docs or [], start=1):
+        if hasattr(d, "page_content"):
+            context_texts.append(d.page_content)
+            md = d.metadata or {}
+            retrieved_docs.append({
+                "rank": rank,
+                "doc_id": md.get("id"),
+                "doc_title": md.get("doc_title"),
+                "origin_type": md.get("_origin"),
+                "score": md.get("_score"),
+                "text": d.page_content,  # RAGAS contexts로 그대로 사용 가능
+            })
+        else:
+            # 혹시 문자열로 들어오면 안전하게 처리
+            txt = str(d)
+            context_texts.append(txt)
+            retrieved_docs.append({"rank": rank, "text": txt})
+
+    preview = ", ".join([t[:20] + "..." for t in context_texts[:3]])
     return {
-            "context": docs,
-            "query_result": "N/A (Vector Mode)",
-            "trace_log": update_trace(state, "Retriever", f"Found {len(docs)} docs: {doc_preview}")
-        }
+        "context": context_texts,
+        "retrieved_docs": retrieved_docs,
+        "query_result": "N/A (Vector Mode)",
+        "trace_log": update_trace(state, "Retriever", f"Found {len(context_texts)} docs: {preview}")
+    }
+
+
+########################################################################
+########################################################################
+
 
 async def node_gen_graph(state: AgentState):
     """[Gen Graph] <think> 제거 후 Cypher 코드만 추출"""
@@ -359,6 +410,7 @@ async def node_summarizer(state: AgentState):
     
     db_res = state.get("query_result", "N/A")
     docs = state.get("context", [])
+    doc_text = "\n".join([f"======\n{t}\n======" for t in docs]) if docs else "No docs"
     
     # [수정] SimpleDocument 객체 리스트를 문자열로 변환하는 로직 추가
     if docs:
