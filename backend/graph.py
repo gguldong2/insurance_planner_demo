@@ -36,6 +36,11 @@ llm = ChatOpenAI(
 # -------------------------------------------------------------------------
 # 2. 상태(State) 정의
 # -------------------------------------------------------------------------
+
+# <<<TypedDict>>>
+# TypedDict는 런타임 검증이 없음
+# 즉, 파이썬 실행 시에는 강제않음(pydantic과 다름)
+# 타입 체커(mypy, pyright)나 사람이 보기 위한 “설계 계약서” 역할
 class AgentState(TypedDict):
     """     
     LangGraph 상태 스키마 (이전과 동일)
@@ -46,13 +51,13 @@ class AgentState(TypedDict):
     mode: str                       # graph | sql | vector | general
     generated_query: str
     query_result: str
-    context: List[str]              # RAG용 검색 문서
+    context: List[str]              # RAG용 검색 문서, LLM에 넣을 텍스트
     evaluation: Dict[str, Any]      # 검증 결과
     final_answer: str
     retry_count: int
     error: Optional[str]            # 실행 에러 메시지
     trace_log: List[str]
-    retrieved_docs: List[Dict[str, Any]]  # ✅ 평가/모니터링용(구조화)
+    retrieved_docs: List[Dict[str, Any]]  # ✅ 평가/모니터링용(구조화) -> 랭스미스에서 받기 위해
     node_models: Dict[str, str]           # ✅ 노드별 모델 기록(추후 확장 대비)
 
 # -------------------------------------------------------------------------
@@ -256,9 +261,11 @@ async def node_router(state: AgentState):
 
 ############ LangSmith & RAGAS용 ###########
 
-async def node_retriever(state: AgentState):
+async def node_retriever(state: AgentState) -> AgentState:
     """[Retriever] Vector 검색 → (1) LLM용 context 텍스트 (2) 평가용 구조화 docs 저장"""
     query = state["question"]
+    
+    # vector.py에서 List[SimpleDocument]가 돌아옴
     docs = await search_documents(query, k=3)
 
     # LLM 프롬프트에 넣을 텍스트 리스트
@@ -273,19 +280,27 @@ async def node_retriever(state: AgentState):
             retrieved_docs.append({
                 "rank": rank,
                 "doc_id": md.get("id"),
-                "doc_title": md.get("doc_title"),
+                "title": md.get("doc_title", "No Title"),  # ✅ 키명 통일
                 "origin_type": md.get("_origin"),
                 "score": md.get("_score"),
-                "text": d.page_content,  # RAGAS contexts로 그대로 사용 가능
+                "text": d.page_content,  # RAGAS 평가에서 contexts로 그대로 사용할 원문문
             })
         else:
             # 혹시 문자열로 들어오면 안전하게 처리
             txt = str(d)
             context_texts.append(txt)
-            retrieved_docs.append({"rank": rank, "text": txt})
+            retrieved_docs.append({
+                "rank": rank,
+                "doc_id": None,
+                "title": "Unknown",
+                "origin_type": None,
+                "score": None,
+                "text": txt,
+            })
 
-    preview = ", ".join([t[:20] + "..." for t in context_texts[:3]])
+    preview = ", ".join([(t[:20] + "...") for t in context_texts[:3] if t])
     return {
+        **state,  #(확장성/안정성)을 위해 state
         "context": context_texts,
         "retrieved_docs": retrieved_docs,
         "query_result": "N/A (Vector Mode)",
@@ -402,49 +417,80 @@ async def node_executor(state: AgentState):
     
 #     return {"final_answer": final_clean}
 
+
+#######################################################################################
+#######################################################################################
+# '''
+# 노드별 모델명이 바뀌는 미래를 대비해 “node_models”에 기록
+# 너는 추후 node_router, node_critic, node_summarizer 등에서 서로 다른 모델을 쓸 가능성이 크다고 했지.
+# 실무에서 제일 관리하기 좋은 방식은:
+# 모델 생성(LLM 객체 생성) 시점에 “이 노드가 무슨 모델을 썼는지”를 state에 적어두는 것.
+# '''
+
+
+def _record_model(state: AgentState, node: str, llm: ChatOpenAI) -> Dict[str, str]:
+    node_models = dict(state.get("node_models", {}) or {})
+    # ChatOpenAI는 model_name / model 등 속성이 버전에 따라 다를 수 있어 안전하게 처리
+    model_name = (
+        getattr(llm, "model_name", None)
+        or getattr(llm, "model", None)
+        or getattr(getattr(llm, "client", None), "model", None)
+        or "unknown"
+    )
+    node_models[node] = model_name
+    return node_models
+
+
+
 async def node_summarizer(state: AgentState):
     """[Summarizer] <think> 제거 후 최종 답변 제공"""
     print("DEBUG: Summarizer Node Entered", flush=True) # [디버깅]
     
+    # ✅ summarizer에서 사용한 모델 기록 (노드별 모델 추적)
+    node_models = _record_model(state, "summarizer", llm)
+
+    
     chain = ChatPromptTemplate.from_template(SUMMARIZER_PROMPT) | llm
     
     db_res = state.get("query_result", "N/A")
-    docs = state.get("context", [])
+
+    # ✅ retriever에서 context를 List[str]로 고정했으니, 여기서는 문자열 리스트로만 처리
+    docs: List[str] = state.get("context", []) or []
     doc_text = "\n".join([f"======\n{t}\n======" for t in docs]) if docs else "No docs"
-    
-    # [수정] SimpleDocument 객체 리스트를 문자열로 변환하는 로직 추가
-    if docs:
-        # docs가 SimpleDocument 객체 리스트인 경우 처리
-        doc_texts = []
-        for d in docs:
-            if hasattr(d, 'page_content'):
-                # 출처(제목)와 내용을 같이 넣어주면 LLM 답변이 더 정확해집니다.
-                title = d.metadata.get('doc_title', '문서')
-                content = d.page_content
-                doc_texts.append(f"======\n[출처: {title}]\n{content}\n======")
-            else:
-                # 만약 그냥 문자열이라면 그대로 추가
-                doc_texts.append(str(d))
-        doc_text = "\n".join(doc_texts)
-    else:
-        doc_text = "No docs"
-    
-    # 디버깅용: 프롬프트에 들어갈 텍스트 길이 확인
+
     print(f"DEBUG: Context Length sent to LLM: {len(doc_text)} chars", flush=True)
 
     try:
         ans = await chain.ainvoke({
-            "q": state["question"], "r": db_res, "c": doc_text
+            "q": state["question"],
+            "r": db_res,
+            "c": doc_text
         })
         
         # [적용]
         final_clean = remove_think_tag(ans.content)
-        return {"final_answer": final_clean}
+
+        return {
+            **state,                 # ✅ state 유지
+            "node_models": node_models,
+            "final_answer": final_clean,
+            "error": None,           # ✅ 이전 에러가 남아있지 않게 정리(선택)
+            "trace_log": update_trace(state, "Summarizer", "Generated final answer"),
+        }
 
     except Exception as e:
         print(f"DEBUG: Summarizer LLM Error: {e}", flush=True)
-        return {"final_answer": "죄송합니다. 답변을 생성하는 도중 오류가 발생했습니다.", "error": str(e)}
+        return {
+            **state,
+            "node_models": node_models,
+            "final_answer": "답변을 생성하는 도중 오류가 발생했습니다.",
+            "error": str(e),
+            "trace_log": update_trace(state, "Summarizer", f"LLM Error: {e}"),
+        }
 
+
+#######################################################################################
+#######################################################################################
 
 
 async def node_general(state: AgentState):

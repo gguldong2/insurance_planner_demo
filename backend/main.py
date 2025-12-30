@@ -66,9 +66,24 @@ async def chat_endpoint(req: ChatRequest):
             "final_answer": "",
             "retry_count": 0,
             "trace_log": [],
+            "retrieved_docs": [],   # ✅ 추가 (KeyError 방지 + 평가 재료 자리)
+            "node_models": {},      # ✅ 추가 (노드별 모델 기록 자리)
+            "error": None,          # ✅ (선택) AgentState에 있으면 초기화 권장
         }
         
-        result = await app_graph.ainvoke(inputs)  #비동기(LangGraph의 비동기 실행 메서드)
+            # ✅ LangSmith에서 보기 편하게 “실행 이름/메타”를 주는 패턴
+        config = {
+            "run_name": "chat_request",  # LangSmith에서 run 이름으로 노출
+            "tags": ["env:dev", "entry:chat"],
+            "metadata": {
+                "has_gt": False,
+                "app": "agens-graphagent",
+            }
+
+        }
+
+
+        result = await app_graph.ainvoke(inputs, config=config)  #비동기(LangGraph의 비동기 실행 메서드)
         
         return ChatResponse(
             answer=result.get("final_answer", "No answer"),
