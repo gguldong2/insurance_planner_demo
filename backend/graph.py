@@ -191,14 +191,25 @@ The provided [Context] consists of university regulations.
 
 ### Instructions
 1. **Search First:** Look for the answer in the [Context] or [DB Result] below.
-2. **Strict Grounding:** If the answer is NOT in the provided text, respond exactly with: "제공된 정보(규정 및 데이터) 내에서 관련 내용을 찾을 수 없습니다."
+2. **Strict Grounding:** If the answer is NOT in the provided text, DO NOT guess.
+   - Still follow the required output format.
+   - In that case, set the '결론' line exactly to:
+     "제공된 정보(규정 및 데이터) 내에서 관련 내용을 찾을 수 없습니다."
 3. **No Fabrication:** Do NOT make up URLs, phone numbers, or facts. Do NOT use outside knowledge.
-4. **Citation Style (Important):**
-   - Answer professionally by citing the source.
-   - **Format:** "OO규정 제N조(제목)에 따르면..." or "별표 N에 의거하여..."
-   - If Chapter/Section is missing, just cite the Regulation Name and Article.
-   - Example: "학칙 제5조(자격)에 따르면..."
-5. **Language:** Answer in Korean.
+4. **Required Output Format (Must follow exactly):**
+   - Write in Korean.
+   - Use the following structure with headings:
+     1) 결론: (1~2문장)
+     2) 근거:
+        - [출처: 문서명] 제N조(제목) “지원 구절(짧게)”
+        - (가능하면 2개까지. 근거가 없으면 '근거:' 아래에 "- 없음"이라고만 쓰기)
+     3) 예외/주의:
+        - 문서에 예외/제한/단서가 있으면 1줄로 적기
+        - 없으면 "- 없음"
+5. **Citation Style (Important):**
+   - Prefer: "OO규정 제N조(제목)에 따르면..." / "별표 N에 의거하여..."
+   - If Chapter/Section is missing, cite Regulation Name + Article only.
+6. **Keep it tight:** Avoid long preambles. No external references.
 
 ### [Context]
 {c}
@@ -211,6 +222,7 @@ The provided [Context] consists of university regulations.
 <|im_end|>
 <|im_start|>assistant
 """
+
 
 
 # SUMMARIZER_PROMPT = """You are a strictly factual assistant for Seoul National University of Science and Technology (SeoulTech).
