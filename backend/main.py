@@ -1,6 +1,11 @@
 import os
 import uvicorn
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, BackgroundTasks  #BackgroundTasks 온라인 평가를 위해 추가
+###### 온라인 평가를 위해 추가 ######
+import random
+from pathlib import Path
+import json
+##################################
 from pydantic import BaseModel, Field
 from typing import List, Optional
 from backend.graph import app_graph
@@ -49,8 +54,99 @@ class ChatResponse(BaseModel):
 #     except Exception as e:
 #         raise HTTPException(status_code=500, detail=str(e))
 
+
+
+
+################################  온라인 평가  #################################
+# =========================
+# 4/5 온라인 평가(운영 모니터링) 설정
+# =========================
+# - ENABLE_ONLINE_CAPTURE: /chat에서 평가용 payload를 "큐(파일)"에 적재할지 여부
+# - ONLINE_EVAL_SAMPLE_RATE: 정상 케이스에서 랜덤 샘플링 비율 (예: 0.05 = 5%)
+# - ONLINE_EVAL_CTXCHARS_MIN: ctx_chars가 이 값보다 작으면(컨텍스트 급감) 100% 수집
+# - ONLINE_EVAL_QUEUE_PATH: 큐 파일 경로
+#
+# ⚠️ 중요:
+# - ENABLE_ONLINE_CAPTURE=false면 "아예 안 쌓임" (큐 파일에 적재 자체를 안 함)
+# - ENABLE_ONLINE_CAPTURE=true면 "수집만" 함 (RAGAS 평가는 worker가 돌 때만 발생)
+ENABLE_ONLINE_CAPTURE = os.getenv("ENABLE_ONLINE_CAPTURE", "false").lower() == "true"
+ONLINE_EVAL_SAMPLE_RATE = float(os.getenv("ONLINE_EVAL_SAMPLE_RATE", "0.05"))
+ONLINE_EVAL_CTXCHARS_MIN = int(os.getenv("ONLINE_EVAL_CTXCHARS_MIN", "1000"))
+ONLINE_EVAL_QUEUE_PATH = Path(os.getenv("ONLINE_EVAL_QUEUE_PATH", "eval/online_queue.jsonl"))
+
+# (선택) 큐 파일 무한 증가 방지용 상한 (MB)
+ONLINE_QUEUE_MAX_MB = int(os.getenv("ONLINE_QUEUE_MAX_MB", "100"))  # 기본 100MB
+ONLINE_QUEUE_MAX_BYTES = ONLINE_QUEUE_MAX_MB * 1024 * 1024
+
+
+def _calc_contexts_and_stats(result: dict) -> tuple[list[str], int, int]:
+    """
+    result(state)에서 contexts(list[str]), ctx_chars(총 글자수), k(문서개수)를 계산
+    - contexts는 retrieved_docs[].text 기준으로 통일 (3/5와 동일)
+    """
+    docs = result.get("retrieved_docs") or []
+    contexts = [d.get("text") for d in docs if d.get("text")]
+    ctx_chars = sum(len(c) for c in contexts)
+    k = len(docs)
+    return contexts, ctx_chars, k
+
+
+def _queue_is_too_large(path: Path) -> bool:
+    """
+    큐 파일이 너무 커지면(디스크 무한 증가) 수집을 자동 차단할 때 사용
+    """
+    try:
+        if not path.exists():
+            return False
+        return path.stat().st_size >= ONLINE_QUEUE_MAX_BYTES
+    except Exception:
+        # stat 실패 시 보수적으로 "크다"로 처리하지 않고 통과
+        return False
+
+
+def should_capture_for_online_eval(result: dict) -> bool:
+    """
+    ✅ Rule + Random 샘플링
+    - "전 요청 trace(LangSmith)"는 이미 1/5로 전수 저장되고,
+    - 여기서는 "RAGAS 평가용 payload를 큐에 쌓을지"만 결정한다.
+    """
+    # 0) 전체 스위치: 수집 자체를 끄면 무조건 False
+    if not ENABLE_ONLINE_CAPTURE:
+        return False
+    # 1) 큐 파일이 너무 커졌으면 수집 중단 (운영 안전장치)
+    if _queue_is_too_large(ONLINE_EVAL_QUEUE_PATH):
+        return False
+    # 2) 문제 가능성 높은 케이스는 100% 수집
+    contexts, ctx_chars, k = _calc_contexts_and_stats(result)
+    # error가 있으면 무조건 수집
+    if result.get("error"):
+        return True
+    # retriever 실패(컨텍스트 없음)도 무조건 수집
+    if len(contexts) == 0:
+        return True
+    # 컨텍스트 급감(운영에서 매우 중요한 이상신호) → 무조건 수집
+    if ctx_chars < ONLINE_EVAL_CTXCHARS_MIN:
+        return True
+    # 3) 나머지 정상 케이스는 랜덤 샘플링 (예: 5%)
+    return random.random() < ONLINE_EVAL_SAMPLE_RATE
+
+
+def enqueue_eval_payload(payload: dict) -> None:
+    """
+    ✅ (가벼운 시작) 파일 기반 큐에 append
+    - 이 함수는 BackgroundTasks로 호출되어 /chat 응답 지연을 최소화한다.
+    - 파일은 디스크에 남기 때문에 서버 재시작해도 보존됨(삭제하지 않는 한).
+    """
+    ONLINE_EVAL_QUEUE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with ONLINE_EVAL_QUEUE_PATH.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(payload, ensure_ascii=False) + "\n")
+
+
+###############################################################################
+
+
 @app.post("/chat", response_model=ChatResponse)
-async def chat_endpoint(req: ChatRequest):
+async def chat_endpoint(req: ChatRequest, background_tasks: BackgroundTasks):
     try:
         # Pydantic V2: req.dict() -> req.model_dump()
         # 필요한 필드만 추출하여 초기 상태 구성
@@ -78,13 +174,39 @@ async def chat_endpoint(req: ChatRequest):
             "metadata": {
                 "has_gt": False,
                 "app": "agens-graphagent",
+                # (선택) 온라인 평가 수집 on/off 상태도 남기면 운영 디버깅에 좋음
+                "online_capture": ENABLE_ONLINE_CAPTURE,
             }
 
         }
 
-
         result = await app_graph.ainvoke(inputs, config=config)  #비동기(LangGraph의 비동기 실행 메서드)
-        
+
+        # =========================
+        # ✅ 4/5: 온라인 평가용 payload "수집" (RAGAS 실행은 여기서 안 함)
+        # =========================
+        if should_capture_for_online_eval(result):
+            contexts, ctx_chars, k = _calc_contexts_and_stats(result)
+
+            payload = {
+                "question": inputs["question"],
+                "answer": result.get("final_answer"),
+                "contexts": contexts,                 # ✅ RAGAS 입력용
+                "mode": result.get("mode"),
+                "node_models": result.get("node_models") or {},
+                "meta": {
+                    "k": k,
+                    "ctx_chars": ctx_chars,           # ✅ 컨텍스트 급감 탐지 핵심값
+                    "error": result.get("error"),
+                },
+                # (선택) 추후 trace와 조인하고 싶으면 request_id 같은 것을 넣는 게 좋음
+                # "request_id": ...
+            }
+
+        # =========================
+        # ✅ 응답 로그는 요약만 (마지막 10줄)
+        # =========================
+        logs = result.get("trace_log", []) or []
         return ChatResponse(
             answer=result.get("final_answer", "No answer"),
             # logs=result.get("trace_log", [])
