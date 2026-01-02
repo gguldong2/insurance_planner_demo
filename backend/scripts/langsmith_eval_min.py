@@ -46,6 +46,51 @@ async def target(inputs: dict) -> dict:
     }
 
 
+def ragas_evaluator(example: dict, outputs: dict) -> dict:
+    """
+    LangSmith code evaluator:
+    - returns {"results":[{"key":..., "score":...}, ...]}
+    """
+    question = (example.get("inputs") or {}).get("question") or (example.get("inputs") or {}).get("query") or ""
+    answer = outputs.get("final_answer", "") or ""
+    contexts = outputs.get("contexts") or []
+
+    # contexts 없으면 RAGAS 계산 불가 → 스킵
+    if not contexts:
+        return {
+            "results": [
+                {"key": "ragas_skipped", "value": "empty_contexts"}
+            ]
+        }
+
+    from ragas import evaluate
+    from ragas.metrics import context_precision, faithfulness, answer_relevancy
+
+    dataset = {
+        "question": [question],
+        "answer": [answer],
+        "contexts": [contexts],
+    }
+
+    result = evaluate(
+        dataset=dataset,
+        metrics=[context_precision, faithfulness, answer_relevancy],
+    )
+
+    df = result.to_pandas()
+    row = df.iloc[0].to_dict()
+
+    # LangSmith에 여러 점수 컬럼으로 노출
+    results = []
+    for k, v in row.items():
+        try:
+            results.append({"key": f"ragas_{k}", "score": float(v)})
+        except Exception:
+            pass
+
+    return {"results": results}
+
+
 def format_strict_evaluator(inputs: dict, outputs: dict) -> dict:
     ans = outputs.get("answer", "") or ""
     ok = all(k in ans for k in ["1) 결론:", "2) 근거:", "3) 예외/주의:"]) and ("[출처:" in ans) and ("제" in ans and "조" in ans)
@@ -56,7 +101,9 @@ async def main():
     await aevaluate(
         target,
         data=dataset_name,
-        evaluators=[format_strict_evaluator],
+        evaluators= [format_strict_evaluator, 
+                    ragas_evaluator],   # ✅ 추가(RAGAS 평가)
+        experiment_prefix="controlled_ragas",   # 이름 취향
     )
 
 if __name__ == "__main__":
