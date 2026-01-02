@@ -22,11 +22,29 @@ async def target(inputs: dict) -> dict:
         "error": None,
     }
     out = await app_graph.ainvoke(state, config={"tags": ["langsmith:eval"]})
+
+    # ✅ contexts는 "retrieved_docs.text"에서 구성
+    contexts = []
+    for d in (out_state.get("retrieved_docs") or []):
+        txt = d.get("text")
+        if txt:
+            contexts.append(txt)
+
+
+    # return {
+    #     "answer": out.get("final_answer", ""),
+    #     "contexts": [d.get("text") for d in (out.get("retrieved_docs") or []) if d.get("text")],
+    #     "raw": out,
+    # }
+    ##################### 수정 ##################
+    # 수정 포인트: offline_ragas_eval.py가 쓰는 키가 answer=final_answer, contexts=contexts 형태였으니, LangSmith evaluator도 그걸 그대로 먹게 만드는 게 안정적
     return {
-        "answer": out.get("final_answer", ""),
-        "contexts": [d.get("text") for d in (out.get("retrieved_docs") or []) if d.get("text")],
-        "raw": out,
+        "final_answer": out_state.get("final_answer", ""),
+        "contexts": contexts,
+        "mode": out_state.get("mode"),
+        "trace_log": out_state.get("trace_log", []),
     }
+
 
 def format_strict_evaluator(inputs: dict, outputs: dict) -> dict:
     ans = outputs.get("answer", "") or ""
