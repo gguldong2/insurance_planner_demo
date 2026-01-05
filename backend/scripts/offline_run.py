@@ -21,7 +21,11 @@ QUESTIONS_PATH = Path("eval/questions.jsonl")
 RUNS_DIR = Path("eval/runs")
 
 DEFAULT_K = env_int("OFFLINE_RETRIEVAL_K", 3)
-CONCURRENCY = env_int("OFFLINE_CONCURRENCY", 1)  # 1부터 시작 추천
+CONCURRENCY = env_int("OFFLINE_CONCURRENCY", 3)  # 비동기 동시 작업 갯수
+OFFLINE_TIMEOUT_SEC = env_int("OFFLINE_TIMEOUT_SEC", 120)  # 요청 타임아웃(초)
+PROGRESS_EVERY = env_int("OFFLINE_PROGRESS_EVERY", 10)     # N개마다 진행 로그
+
+
 
 def make_inputs(question: str, graph_schema: str = "", sql_schema: str = "") -> Dict[str, Any]:
     # 너 /chat과 동일한 초기 state를 유지 (KeyError 방지)
@@ -79,7 +83,10 @@ async def run_one(q: Dict[str, Any], run_name: str, tags: List[str]) -> Dict[str
     }
 
     try:
-        result = await app_graph.ainvoke(inputs, config=config)
+        result = await asyncio.wait_for(
+            app_graph.ainvoke(inputs, config=config),
+            timeout=OFFLINE_TIMEOUT_SEC,
+        )
         contexts = extract_contexts_from_state(result)
         ctx_chars = calc_ctx_chars(contexts)
         k = len(result.get("retrieved_docs") or [])
@@ -128,16 +135,39 @@ async def main():
     out_path = RUNS_DIR / f"{run_tag}_outputs.jsonl"
     rows = read_jsonl(QUESTIONS_PATH)
 
+    # --- resume: 이미 outputs에 기록된 id는 스킵 ---
+    done_ids = set()
+    if out_path.exists():
+        prev = read_jsonl(out_path)
+        for r in prev:
+            if r.get("id"):
+                done_ids.add(r["id"])
+
+    if done_ids:
+        rows = [r for r in rows if r.get("id") not in done_ids]
+        print(f"↩️ Resume: skip already done={len(done_ids)}, remaining={len(rows)}")
+
     run_name = os.getenv("LANGSMITH_RUN_NAME", "offline_eval")
     base_tags = ["offline:true", f"run:{run_tag}"]
 
     sem = asyncio.Semaphore(CONCURRENCY)
 
+    total = len(rows)
+    done = 0
+    lock = asyncio.Lock()
+    PROGRESS_EVERY = env_int("OFFLINE_PROGRESS_EVERY", 10)  # 없으면 상단/다른 위치에서 선언
+    
     async def runner(q):
+        nonlocal done 
         async with sem:
             tags = base_tags + [f"type:{q.get('type','unknown')}"]
             rec = await run_one(q, run_name=run_name, tags=tags)
             append_jsonl(out_path, rec)
+
+            async with lock:
+                done += 1
+                if done % PROGRESS_EVERY == 0 or done == total:
+                    print(f"[offline_run] {done}/{total} saved -> {out_path}", flush=True)
 
     await asyncio.gather(*[runner(q) for q in rows])
 
