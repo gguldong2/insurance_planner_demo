@@ -80,7 +80,7 @@ load_dotenv()
 # [설정]
 # ==========================================
 QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
-COLLECTION_NAME = os.getenv("QDRANT_COLLECTION_NAME", "seoultech_regulations")
+COLLECTION_NAME = os.getenv("QDRANT_COLLECTION_NAME", "cancer_insurance")
 
 EMBEDDING_MODEL_NAME = "BAAI/bge-m3"
 RERANKER_MODEL_NAME = "BAAI/bge-reranker-v2-m3"
