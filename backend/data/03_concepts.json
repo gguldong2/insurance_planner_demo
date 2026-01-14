@@ -1,0 +1,14 @@
+[
+  {
+    "concept_id": "CPT_TARGETED_THERAPY",
+    "label_ko": "표적항암치료",
+    "category": "Treatment",
+    "description": "암세포의 특정 분자만을 표적으로 하여 공격하는 치료법으로, 정상세포의 손상을 최소화합니다."
+  },
+  {
+    "concept_id": "CPT_CANCER",
+    "label_ko": "암(악성신생물)",
+    "category": "Diagnosis",
+    "description": "제1조에 정의된 악성신생물로, C코드로 분류되는 질병입니다."
+  }
+]

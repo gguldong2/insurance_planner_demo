@@ -1,0 +1,12 @@
+[
+  {
+    "benefit_id": "BEN_TARGETED_01",
+    "rider_id": "RIDER_CANCER_CARE_01",
+    "name": "표적항암약물허가치료비",
+    "amount_value": 20000000,
+    "amount_text": "2,000만원",
+    "limit_count": 1,
+    "condition_summary": "암, 기타피부암, 갑상선암으로 진단 확정되고 표적항암약물허가치료를 받았을 때",
+    "related_concept": "CPT_TARGETED_THERAPY" 
+  }
+]

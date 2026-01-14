@@ -1,0 +1,10 @@
+[
+  {
+    "rider_id": "RIDER_CANCER_CARE_01",
+    "product_id": "HANWHA_SIGNATURE_CANCER",
+    "name": "표적항암약물허가치료특약(갱신형)",
+    "type": "OPTION",
+    "renewal_type": "RENEWAL",
+    "insurance_period": "10년만기"
+  }
+]
