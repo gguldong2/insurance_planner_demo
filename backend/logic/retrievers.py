@@ -150,12 +150,38 @@ async def retrieve_condition(concept_id: str):
     return final_results
 
 # Case 4: EXPLAIN_TERM (Graph Only / Vector Fallback)
-async def retrieve_term(keyword: str):
-    # 1. Graph (Ontology)
-    # 2. Vector (Glossary)
-    # (Turn 1 로직과 유사하므로 간략화)
-    pass 
+# async def retrieve_term(keyword: str):
+#     # 1. Graph (Ontology)
+#     # 2. Vector (Glossary)
+#     # (Turn 1 로직과 유사하므로 간략화)
+#     pass 
+# 기존: pass로 되어 있던 부분 수정
 
+async def retrieve_term(keyword: str):  #우선 pass만 안 되도록 구현
+    print(f"🔍 [Term] Searching for: {keyword}")
+    if not keyword: return None
+    
+    # 1. VectorDB에서 용어 정의 검색 (Clause 중 GENERAL 태그 등 활용 가능)
+    vec = get_embedding(keyword)
+    filter_cond = models.Filter(
+        must=[
+            models.FieldCondition(key="type", match=models.MatchValue(value="clause"))
+        ]
+    )
+    
+    hits = await db.search_vector(
+        collection="insurance_knowledge", 
+        vector=vec, 
+        filter=filter_cond, 
+        limit=1
+    )
+    
+    if hits:
+        return {
+            "definition": hits[0].payload.get('text', ''),
+            "category": hits[0].payload.get('tag', 'GENERAL')
+        }
+    return None
 
 
 

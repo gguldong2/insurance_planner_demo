@@ -14,7 +14,7 @@ class ClauseLoader(BaseLoader):
             # [핵심 로직] JSON에서 Tag와 Relation Type 꺼내기 (없으면 기본값)
             # ------------------------------------------------------------------
             # 1. 태그(Tag): EXCLUSION, CONDITION, GENERAL 등
-            clause_tag = c.get('tag', 'GENERAL')
+            clause_tag = c.get('tag', 'GENERAL').upper()
             
             # 2. 관계(Relation): RESTRICTS, EVIDENCED_BY, HAS_CLAUSE 등
             rel_type = c.get('relation_type', 'HAS_CLAUSE')
