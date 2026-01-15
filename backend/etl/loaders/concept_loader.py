@@ -7,8 +7,10 @@ class ConceptLoader(BaseLoader):
         print(f"🧠 [Concept] Processing {len(data)} items... (Target: {target_mode})")
         
         points = []
+        debug_list = []
+
         for cpt in data:
-            # 1. GraphDB 적재 (All 또는 Graph일 때)
+            # 1. GraphDB
             if target_mode in ["all", "graph"]:
                 cypher = f"""
                 MERGE (c:Concept {{concept_id: '{cpt['concept_id']}'}})
@@ -18,7 +20,7 @@ class ConceptLoader(BaseLoader):
                 """
                 self.ctx.graph.execute_cypher(cypher)
 
-            # 2. VectorDB 준비 (All 또는 Vector일 때)
+            # 2. VectorDB
             if target_mode in ["all", "vector"]:
                 text = f"{cpt['label_ko']} ({cpt['category']}): {cpt['description']}"
                 vec = self.embed_text(text)
@@ -28,8 +30,12 @@ class ConceptLoader(BaseLoader):
                     vector=vec,
                     payload=cpt
                 ))
+                
+                # 디버그용 (벡터 텍스트 포함)
+                debug_item = cpt.copy()
+                debug_item["_vector_text"] = text
+                debug_list.append(debug_item)
             
-        # VectorDB 업로드
         if points and target_mode in ["all", "vector"]:
             self.qdrant.upsert(collection_name="concepts", points=points)
-            print(f"   -> Upserted {len(points)} vectors.")
+            self.save_debug_json(debug_list, "debug_concepts.json")

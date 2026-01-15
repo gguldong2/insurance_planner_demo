@@ -7,8 +7,9 @@ class BenefitLoader(BaseLoader):
         print(f"💎 [Benefit] Processing {len(data)} items... (Target: {target_mode})")
         
         points = []
+        debug_list = []
+
         for b in data:
-            # 1. GraphDB 적재 (All 또는 Graph일 때 실행)
             if target_mode in ["all", "graph"]:
                 cypher = f"""
                 MATCH (r:Rider {{rider_id: '{b['rider_id']}'}})
@@ -23,7 +24,6 @@ class BenefitLoader(BaseLoader):
                 """
                 self.ctx.graph.execute_cypher(cypher)
 
-            # 2. VectorDB 준비 (All 또는 Vector일 때 실행)
             if target_mode in ["all", "vector"]:
                 text_chunk = f"{b['name']} | {b['condition_summary']} | {b['amount_text']}"
                 vector = self.embed_text(text_chunk)
@@ -41,8 +41,11 @@ class BenefitLoader(BaseLoader):
                     vector=vector,
                     payload=payload
                 ))
+                
+                debug_item = payload.copy()
+                debug_item["_vector_text"] = text_chunk
+                debug_list.append(debug_item)
         
-        # VectorDB 업로드 수행
         if points and target_mode in ["all", "vector"]:
             self.qdrant.upsert(collection_name="insurance_knowledge", points=points)
-            print(f"   -> Upserted {len(points)} vectors.")
+            self.save_debug_json(debug_list, "debug_benefits.json")

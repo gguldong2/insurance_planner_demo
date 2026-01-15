@@ -10,8 +10,9 @@ class RiderLoader(BaseLoader):
         data = self.load_json(file_path)
         print(f"📜 [Rider] Loading {len(data)} items...")
         
+        debug_list = []
+
         for r in data:
-            # Rider 생성 및 Product와 연결
             cypher = f"""
             MATCH (p:Product {{product_id: '{r['product_id']}'}})
             MERGE (r:Rider {{rider_id: '{r['rider_id']}'}})
@@ -22,3 +23,6 @@ class RiderLoader(BaseLoader):
             MERGE (p)-[:HAS_RIDER]->(r)
             """
             self.ctx.graph.execute_cypher(cypher)
+            debug_list.append(r)
+
+        self.save_debug_json(debug_list, "debug_riders.json")

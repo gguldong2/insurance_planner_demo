@@ -17,6 +17,16 @@ class BaseLoader(ABC):
     def embed_text(self, text):
         """텍스트 임베딩 유틸"""
         return self.model.encode(text, return_dense=True)['dense_vecs']
+    
+    # 디버그 파일 저장 함수 추가
+    def save_debug_json(self, data_list, file_name):
+        debug_dir = "backend/data/debug"
+        os.makedirs(debug_dir, exist_ok=True)
+        path = os.path.join(debug_dir, file_name)
+        
+        with open(path, 'w', encoding='utf-8') as f:
+            json.dump(data_list, f, ensure_ascii=False, indent=2)
+        print(f"🐞 [Debug] Saved processed data to {path}")
 
     @abstractmethod
     def run(self, file_path: str, target_mode: str = "all"):  # <--- [수정] 인자 추가

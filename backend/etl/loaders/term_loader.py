@@ -1,4 +1,3 @@
-#(Vector Only)
 from qdrant_client import models
 from .base_loader import BaseLoader
 
@@ -12,11 +11,30 @@ class TermLoader(BaseLoader):
         print(f"📖 [Term] Loading {len(data)} items...")
         
         points = []
+        debug_list = []
+
         for t in data:
             text_chunk = f"용어: {t['term_name']}\n정의: {t['definition']}\n유의어: {', '.join(t['synonyms'])}"
             vec = self.embed_text(text_chunk)
-            # ... (Point 생성 로직 동일) ...
-            points.append(...)
+            
+            payload = {
+                "type": "term",
+                "term_name": t['term_name'],
+                "category": t['category'],
+                "definition": t['definition'],
+                "synonyms": t['synonyms']
+            }
+            
+            points.append(models.PointStruct(
+                id=models.generate_uuid5(t['term_name']),
+                vector=vec,
+                payload=payload
+            ))
+            
+            debug_item = payload.copy()
+            debug_item["_vector_text"] = text_chunk
+            debug_list.append(debug_item)
             
         if points:
             self.qdrant.upsert(collection_name="glossary", points=points)
+            self.save_debug_json(debug_list, "debug_terms.json")
