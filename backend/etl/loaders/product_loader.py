@@ -1,7 +1,13 @@
+#Graph Only
 from .base_loader import BaseLoader
 
 class ProductLoader(BaseLoader):
-    def run(self, file_path):
+    def run(self, file_path, target_mode="all"):
+        # Vector 전용 모드면 Graph 데이터인 Product는 건너뜀
+        if target_mode == "vector":
+            print(f"📦 [Product] Skipping (Target is vector only)")
+            return
+
         data = self.load_json(file_path)
         print(f"📦 [Product] Loading {len(data)} items...")
         

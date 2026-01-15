@@ -1,4 +1,5 @@
 # backend/db/runtime_conn.py
+# graph.py와 retrievers.py에서 사용
 import os
 import psycopg2
 import asyncio

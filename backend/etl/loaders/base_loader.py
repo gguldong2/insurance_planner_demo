@@ -16,10 +16,13 @@ class BaseLoader(ABC):
 
     def embed_text(self, text):
         """텍스트 임베딩 유틸"""
-        # BGE-M3는 dense_vecs를 반환
         return self.model.encode(text, return_dense=True)['dense_vecs']
 
     @abstractmethod
-    def run(self, file_path: str):
-        """ETL 실행 추상 메서드"""
+    def run(self, file_path: str, target_mode: str = "all"):  # <--- [수정] 인자 추가
+        """
+        ETL 실행 추상 메서드
+        :param file_path: 데이터 파일 경로
+        :param target_mode: 'all' | 'graph' | 'vector'
+        """
         pass

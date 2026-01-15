@@ -1,7 +1,12 @@
 from .base_loader import BaseLoader
 
 class RiderLoader(BaseLoader):
-    def run(self, file_path):
+    def run(self, file_path, target_mode="all"):
+        # [수정] target_mode가 vector면 실행하지 않음
+        if target_mode == "vector":
+            print(f"📜 [Rider] Skipping (Target is vector only)")
+            return
+
         data = self.load_json(file_path)
         print(f"📜 [Rider] Loading {len(data)} items...")
         

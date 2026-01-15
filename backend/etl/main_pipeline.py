@@ -1,7 +1,7 @@
 import sys
 import os
+import argparse
 
-# 상위 경로 추가 (backend 모듈 인식)
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
 
 from backend.etl.common import DBContext
@@ -12,31 +12,46 @@ from backend.etl.loaders.benefit_loader import BenefitLoader
 from backend.etl.loaders.clause_loader import ClauseLoader
 from backend.etl.loaders.term_loader import TermLoader
 
+
+# 명령어 인자(--target, --loader)를 받아 로더를 통제하도록 수정
 def main():
-    print("=== 🏁 Start Modular ETL Pipeline ===")
+    # CLI 인자 파싱
+    parser = argparse.ArgumentParser(description="Insurance ETL Pipeline")
+    parser.add_argument("--target", type=str, choices=["all", "graph", "vector"], default="all", 
+                        help="적재할 타겟 DB (all, graph, vector)")
+    parser.add_argument("--loader", type=str, default="all", 
+                        help="실행할 특정 로더 이름 (product, rider, concept, benefit, clause, term)")
     
-    # 1. DB Context 초기화 (연결)
+    args = parser.parse_args()
+
+    print(f"=== 🏁 Start ETL Pipeline [Target: {args.target.upper()} | Loader: {args.loader.upper()}] ===")
+    
     ctx = DBContext()
     
     try:
-        # 2. 로더 정의 (순서 중요! 부모 노드 -> 자식 노드)
+        # (LoaderInstance, FilePath, LoaderName)
         steps = [
-            (ProductLoader(ctx), "backend/data/01_products.json"),
-            (RiderLoader(ctx),   "backend/data/02_riders.json"),
-            (ConceptLoader(ctx), "backend/data/03_concepts.json"),
-            (BenefitLoader(ctx), "backend/data/04_benefits.json"),
-            (ClauseLoader(ctx),  "backend/data/05_clauses.json"),
-            (TermLoader(ctx),    "backend/data/06_terms.json"),
+            (ProductLoader(ctx), "backend/data/01_products.json", "product"),
+            (RiderLoader(ctx),   "backend/data/02_riders.json", "rider"),
+            (ConceptLoader(ctx), "backend/data/03_concepts.json", "concept"),
+            (BenefitLoader(ctx), "backend/data/04_benefits.json", "benefit"),
+            (ClauseLoader(ctx),  "backend/data/05_clauses.json", "clause"),
+            (TermLoader(ctx),    "backend/data/06_terms.json", "term"),
         ]
 
-        # 3. 파이프라인 실행
-        for loader, file_path in steps:
-            if os.path.exists(file_path):
-                loader.run(file_path)
-            else:
-                print(f"⚠️ Warning: File not found {file_path}")
+        for loader, file_path, name in steps:
+            # 1. 특정 로더 필터링
+            if args.loader != "all" and args.loader != name:
+                continue
 
-        print("\n=== 🎉 All ETL Jobs Finished Successfully ===")
+            # 2. 파일 존재 확인 및 실행
+            if os.path.exists(file_path):
+                # target_mode 전달
+                loader.run(file_path, target_mode=args.target)
+            else:
+                print(f"⚠️ Skip {name}: File not found ({file_path})")
+
+        print("\n=== 🎉 Pipeline Finished ===")
 
     except Exception as e:
         print(f"\n❌ Pipeline Failed: {e}")
