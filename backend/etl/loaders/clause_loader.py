@@ -53,13 +53,16 @@ class ClauseLoader(BaseLoader):
                 # 검색용 텍스트 뭉치 만들기
                 text_chunk = f"{c['article_num']} {c['title']}\n{c['content']}"
                 vec = self.embed_text(text_chunk)
+
+                source_node = c.get('source_node', '')
+                rider_id_for_payload = source_node if "RIDER" in source_node else None  # ★ 핵심
                 
                 payload = {
                     "type": "clause",       # (고정값) 데이터 유형 식별자
                     "tag": clause_tag,      # ★ [추가] 필터링용 태그
                     "node_id": c['clause_id'],
-                    "rider_id": c.get('rider_id') if "RIDER" in c.get('source_node', '') else None,
-                    "article_no": c['article_num'],
+                    "rider_id": rider_id_for_payload,
+                    "article_num": c['article_num'],
                     "related_concepts": c.get('related_concepts', []),
                     "text": text_chunk
                 }
