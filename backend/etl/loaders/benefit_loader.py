@@ -10,6 +10,9 @@ class BenefitLoader(BaseLoader):
         debug_list = []
 
         for b in data:
+            limit_val = b.get("limit_count", None)
+            limit_cy = "NULL" if limit_val is None else int(limit_val)
+            
             if target_mode in ["all", "graph"]:
                 cypher = f"""
                 MATCH (r:Rider {{rider_id: '{b['rider_id']}'}})
@@ -18,7 +21,8 @@ class BenefitLoader(BaseLoader):
                 SET b.name = '{b['name']}',
                     b.amount_value = {b['amount_value']},
                     b.amount_text = '{b['amount_text']}',
-                    b.condition_summary = '{b['condition_summary']}'
+                    b.condition_summary = '{b['condition_summary']}',
+                    b.limit_count = {limit_cy}
                 MERGE (r)-[:HAS_BENEFIT]->(b)
                 MERGE (b)-[:RELATED_TO]->(c)
                 """
@@ -33,7 +37,8 @@ class BenefitLoader(BaseLoader):
                     "node_id": b['benefit_id'],
                     "rider_id": b['rider_id'],
                     "text": text_chunk,
-                    "concept_ids": [b['related_concept']]
+                    "concept_ids": [b['related_concept']],
+                    "limit_count": limit_val
                 }
                 
                 points.append(models.PointStruct(
