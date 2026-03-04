@@ -72,10 +72,10 @@ class GraphLoader:
 
     def __init__(self):
         host = os.getenv("DB_HOST") or os.getenv("POSTGRES_HOST", "localhost")
-        port = os.getenv("DB_PORT") or os.getenv("POSTGRES_PORT", "5432")
-        dbname = os.getenv("DB_NAME") or os.getenv("POSTGRES_DB", "postgres")
+        port = os.getenv("DB_PORT") or os.getenv("POSTGRES_PORT", "5435")
+        dbname = os.getenv("DB_NAME") or os.getenv("POSTGRES_DB", "agens")
         user = os.getenv("DB_USER") or os.getenv("POSTGRES_USER", "postgres")
-        password = os.getenv("DB_PASSWORD") or os.getenv("POSTGRES_PASSWORD", "postgres")
+        password = os.getenv("DB_PASSWORD") or os.getenv("POSTGRES_PASSWORD", "agens")
 
         self.graph_path = os.getenv("GRAPH_PATH") or os.getenv("AGENS_GRAPH_NAME", "insurance_graph")
 
