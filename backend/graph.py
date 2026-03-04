@@ -186,7 +186,6 @@ async def node_retriever(state: AgentState) -> Dict[str, Any]:
     try:
         if intent == "CHIT_CHAT":
             log_msg = "Skipped retrieval"
-            
         elif intent == "COMPARE_PRODUCT":
             # [추가된 로직] 상품 비교
             if not concept_id:
