@@ -81,7 +81,7 @@ Analyze the User Input and generate a JSON output.
 - **CHECK_CONDITION**: Requirements, timing. (e.g., "언제부터?", "수술 꼭 해야 해?")
 - **CHECK_EXCLUSION**: NOT covered cases. (e.g., "면책 사유", "지급 제한")
 - **EXPLAIN_TERM**: Definitions. (e.g., "표적항암이 뭐야?")
-- **COMPARE_PRODUCT**: Comparison. (e.g., "A랑 B 차이점")
+- **COMPARE_PRODUCTSS**: Comparison. (e.g., "A랑 B 차이점")
 - **CHIT_CHAT**: Greetings.
 
 ## 2. Extract Entities
@@ -106,7 +106,7 @@ Answer the user's question based ONLY on the provided [Context].
 2. **Persona**:
    - If intent is CHECK_BENEFIT -> Be precise like an accountant. (Focus on Amount)
    - If intent is CHECK_EXCLUSION -> Be strict like a lawyer. (Warn about restrictions)
-   - If intent is COMPARE_PRODUCT -> Be analytical. (Use tables or lists)
+   - If intent is COMPARE_PRODUCTS -> Be analytical. (Use tables or lists)
    - Otherwise -> Be helpful and clear.
 3. **Format**:
    - 결론: (Simple answer)
@@ -186,7 +186,7 @@ async def node_retriever(state: AgentState) -> Dict[str, Any]:
     try:
         if intent == "CHIT_CHAT":
             log_msg = "Skipped retrieval"
-        elif intent == "COMPARE_PRODUCT":
+        elif intent == "COMPARE_PRODUCTS":
             # [추가된 로직] 상품 비교
             if not concept_id:
                 # 비교 기준(표적항암 등)이 없으면 에러 메시지

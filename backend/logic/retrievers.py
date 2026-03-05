@@ -187,7 +187,7 @@ async def retrieve_term(keyword: str):  #우선 pass만 안 되도록 구현
 
 async def retrieve_comparison(concept_id: str, product_keywords: list):
     """
-    [COMPARE_PRODUCT]
+    [COMPARE_PRODUCTS]
     여러 상품(키워드)에 대해 특정 Concept(표적항암)의 보장 내용을 비교 조회
     """
     print(f"🔍 [Comparison] Comparing {product_keywords} on {concept_id}")
