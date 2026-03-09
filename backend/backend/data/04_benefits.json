@@ -1,0 +1,500 @@
+[
+  {
+    "benefit_id": "BEN_059_01",
+    "rider_id": "RIDER_OPT_KA1_1_01",
+    "name": "비급여(전액 본인부담 포함) 암수술자금",
+    "amount_value": 5000000,
+    "amount_text": "매년(매회) 500만원",
+    "condition_summary": "보험기간 중 암보장개시일 이후 암으로 최초 진단 확정되고 최초 진단확정일로부터 매년 진단확정일 전일까지 비급여(전액본인부담 포함) 암 수술을 받은 경우(최대 10년간 매년 1회, 최대 10회 지급). 계약일부터 1년 미만 경과 시 적용.",
+    "limit_count": 1,
+    "related_concept": "CPT_CANCER_SURGERY"
+  },
+  {
+    "benefit_id": "BEN_059_02",
+    "rider_id": "RIDER_OPT_KA1_1_01",
+    "name": "비급여(전액 본인부담 포함) 암수술자금",
+    "amount_value": 10000000,
+    "amount_text": "매년(매회) 1,000만원",
+    "condition_summary": "보험기간 중 암보장개시일 이후 암으로 최초 진단 확정되고 최초 진단확정일로부터 매년 진단확정일 전일까지 비급여(전액본인부담 포함) 암 수술을 받은 경우(최대 10년간 매년 1회, 최대 10회 지급). 계약일부터 1년 이상 경과 시 적용.",
+    "limit_count": 1,
+    "related_concept": "CPT_CANCER_SURGERY"
+  },
+  {
+    "benefit_id": "BEN_059_03",
+    "rider_id": "RIDER_OPT_KA1_1_01",
+    "name": "암중점치료기관(상급종합병원 포함) 비급여(전액본인부담 포함) 암수술자금",
+    "amount_value": 5000000,
+    "amount_text": "매년(매회) 500만원",
+    "condition_summary": "보험기간 중 암보장개시일 이후 암으로 최초 진단 확정되고 최초 진단확정일로부터 매년 진단확정일 전일까지 암중점치료기관(상급종합병원 포함)에서 비급여(전액본인부담 포함) 암 수술을 받은 경우(최대 10년간 매년 1회, 최대 10회 지급). 계약일부터 1년 미만 경과 시 적용.",
+    "limit_count": 1,
+    "related_concept": "CPT_CANCER_SURGERY"
+  },
+  {
+    "benefit_id": "BEN_059_04",
+    "rider_id": "RIDER_OPT_KA1_1_01",
+    "name": "암중점치료기관(상급종합병원 포함) 비급여(전액본인부담 포함) 암수술자금",
+    "amount_value": 10000000,
+    "amount_text": "매년(매회) 1,000만원",
+    "condition_summary": "보험기간 중 암보장개시일 이후 암으로 최초 진단 확정되고 최초 진단확정일로부터 매년 진단확정일 전일까지 암중점치료기관(상급종합병원 포함)에서 비급여(전액본인부담 포함) 암 수술을 받은 경우(최대 10년간 매년 1회, 최대 10회 지급). 계약일부터 1년 이상 경과 시 적용.",
+    "limit_count": 1,
+    "related_concept": "CPT_CANCER_SURGERY"
+  },
+  {
+    "benefit_id": "BEN_074_01",
+    "rider_id": "RIDER_OPT_KA1_1_02",
+    "name": "비급여(전액본인부담 포함) 항암약물·방사선치료자금",
+    "amount_value": 5000000,
+    "amount_text": "매년(매회) 500만원",
+    "condition_summary": "보험기간 중 암보장개시일 이후 암으로 최초 진단 확정되고 최초 진단확정일로부터 매년 진단확정일 전일까지 비급여(전액본인부담 포함) 항암약물치료 또는 항암방사선치료를 받은 경우(최대 10년간 매년 1회, 최대 10회 지급). 계약일부터 1년 미만 경과 시 적용.",
+    "limit_count": 1,
+    "related_concept": "CPT_CANCER_TREATMENT"
+  },
+  {
+    "benefit_id": "BEN_074_02",
+    "rider_id": "RIDER_OPT_KA1_1_02",
+    "name": "비급여(전액본인부담 포함) 항암약물·방사선치료자금",
+    "amount_value": 10000000,
+    "amount_text": "매년(매회) 1,000만원",
+    "condition_summary": "보험기간 중 암보장개시일 이후 암으로 최초 진단 확정되고 최초 진단확정일로부터 매년 진단확정일 전일까지 비급여(전액본인부담 포함) 항암약물치료 또는 항암방사선치료를 받은 경우(최대 10년간 매년 1회, 최대 10회 지급). 계약일부터 1년 이상 경과 시 적용.",
+    "limit_count": 1,
+    "related_concept": "CPT_CANCER_TREATMENT"
+  },
+  {
+    "benefit_id": "BEN_074_03",
+    "rider_id": "RIDER_OPT_KA1_1_02",
+    "name": "암중점치료기관(상급종합병원 포함) 비급여(전액본인부담 포함) 항암약물·방사선치료자금",
+    "amount_value": 5000000,
+    "amount_text": "매년(매회) 500만원",
+    "condition_summary": "보험기간 중 암보장개시일 이후 암으로 최초 진단 확정되고 최초 진단확정일로부터 매년 진단확정일 전일까지 암중점치료기관(상급종합병원 포함)에서 비급여(전액본인부담 포함) 항암약물치료 또는 항암방사선치료를 받은 경우(최대 10년간 매년 1회, 최대 10회 지급). 계약일부터 1년 미만 경과 시 적용.",
+    "limit_count": 1,
+    "related_concept": "CPT_CANCER_TREATMENT"
+  },
+  {
+    "benefit_id": "BEN_074_04",
+    "rider_id": "RIDER_OPT_KA1_1_02",
+    "name": "암중점치료기관(상급종합병원 포함) 비급여(전액본인부담 포함) 항암약물·방사선치료자금",
+    "amount_value": 10000000,
+    "amount_text": "매년(매회) 1,000만원",
+    "condition_summary": "보험기간 중 암보장개시일 이후 암으로 최초 진단 확정되고 최초 진단확정일로부터 매년 진단확정일 전일까지 암중점치료기관(상급종합병원 포함)에서 비급여(전액본인부담 포함) 항암약물치료 또는 항암방사선치료를 받은 경우(최대 10년간 매년 1회, 최대 10회 지급). 계약일부터 1년 이상 경과 시 적용.",
+    "limit_count": 1,
+    "related_concept": "CPT_CANCER_TREATMENT"
+  },
+  {
+    "benefit_id": "BEN_089_01",
+    "rider_id": "RIDER_OPT_KA2_1_01",
+    "name": "암 주요검사비용 지원금",
+    "amount_value": 100000,
+    "amount_text": "1회당 10만원",
+    "condition_summary": "보험기간 중 피보험자가 의사의 필요 소견에 따라 암의 진단·치료 또는 진행상태 확인을 위해 암 주요검사를 받은 경우(연간 1회 한도, 계약일부터 1년 미만).",
+    "limit_count": 1,
+    "related_concept": "CPT_CANCER_TEST"
+  },
+  {
+    "benefit_id": "BEN_089_02",
+    "rider_id": "RIDER_OPT_KA2_1_01",
+    "name": "암 주요검사비용 지원금",
+    "amount_value": 200000,
+    "amount_text": "1회당 20만원",
+    "condition_summary": "보험기간 중 피보험자가 의사의 필요 소견에 따라 암의 진단·치료 또는 진행상태 확인을 위해 암 주요검사를 받은 경우(연간 1회 한도, 계약일부터 1년 이상).",
+    "limit_count": 1,
+    "related_concept": "CPT_CANCER_TEST"
+  },
+  {
+    "benefit_id": "BEN_089_03",
+    "rider_id": "RIDER_OPT_KA2_1_01",
+    "name": "암 기타검사비용 지원금",
+    "amount_value": 50000,
+    "amount_text": "1회당 5만원",
+    "condition_summary": "보험기간 중 피보험자가 의사의 필요 소견에 따라 암의 진단·치료 또는 진행상태 확인을 위해 암 기타검사를 받은 경우(연간 1회 한도, 계약일부터 1년 미만).",
+    "limit_count": 1,
+    "related_concept": "CPT_CANCER_TEST"
+  },
+  {
+    "benefit_id": "BEN_089_04",
+    "rider_id": "RIDER_OPT_KA2_1_01",
+    "name": "암 기타검사비용 지원금",
+    "amount_value": 100000,
+    "amount_text": "1회당 10만원",
+    "condition_summary": "보험기간 중 피보험자가 의사의 필요 소견에 따라 암의 진단·치료 또는 진행상태 확인을 위해 암 기타검사를 받은 경우(연간 1회 한도, 계약일부터 1년 이상).",
+    "limit_count": 1,
+    "related_concept": "CPT_CANCER_TEST"
+  },
+  {
+    "benefit_id": "BEN_089_05",
+    "rider_id": "RIDER_OPT_KA2_1_01",
+    "name": "암 다학제 진료자금",
+    "amount_value": 200000,
+    "amount_text": "1회당 20만원",
+    "condition_summary": "보험기간 중 암보장개시일 이후 암으로 진단이 확정되고, 해당 암의 직접적인 치료를 목적으로 급여 암 다학제 통합진료를 받은 경우(연간 1회 한도).",
+    "limit_count": 1,
+    "related_concept": "CPT_CANCER_TREATMENT"
+  },
+  {
+    "benefit_id": "BEN_089_06",
+    "rider_id": "RIDER_OPT_KA2_1_01",
+    "name": "종합병원 암 집중영양치료자금",
+    "amount_value": 300000,
+    "amount_text": "30만원",
+    "condition_summary": "보험기간 중 암보장개시일 이후 암으로 진단이 확정되고, 해당 암의 직접적인 치료를 목적으로 종합병원에서 급여 암 집중영양치료를 받은 경우(최초 1회 한도).",
+    "limit_count": 1,
+    "related_concept": "CPT_CANCER_TREATMENT"
+  },
+  {
+    "benefit_id": "BEN_106_01",
+    "rider_id": "RIDER_OPT_KA2_1_02",
+    "name": "암진단자금",
+    "disease_type": "암(기타피부암, 대장점막내암, 초기유방암 및 초기갑상선암 제외)",
+    "amount_value": 5000000,
+    "amount_text": "500만원",
+    "condition_summary": "보험기간 중 암보장개시일 이후 피보험자가 해당 암으로 진단 확정된 경우(최초 1회한, 계약일부터 1년 미만).",
+    "limit_count": 1,
+    "related_concept": "CPT_CANCER_DIAGNOSIS",
+    "source": ":contentReference[oaicite:0]{index=0}"
+  },
+  {
+    "benefit_id": "BEN_106_02",
+    "rider_id": "RIDER_OPT_KA2_1_02",
+    "name": "암진단자금",
+    "disease_type": "암(기타피부암, 대장점막내암, 초기유방암 및 초기갑상선암 제외)",
+    "amount_value": 10000000,
+    "amount_text": "1,000만원",
+    "condition_summary": "보험기간 중 암보장개시일 이후 피보험자가 해당 암으로 진단 확정된 경우(최초 1회한, 계약일부터 1년 이상).",
+    "limit_count": 1,
+    "related_concept": "CPT_CANCER_DIAGNOSIS",
+    "source": ":contentReference[oaicite:1]{index=1}"
+  },
+  {
+    "benefit_id": "BEN_106_03",
+    "rider_id": "RIDER_OPT_KA2_1_02",
+    "name": "소액질병진단자금",
+    "disease_type": "기타피부암",
+    "amount_value": 1000000,
+    "amount_text": "100만원",
+    "condition_summary": "보험기간 중 피보험자가 기타피부암으로 진단 확정된 경우(해당 질병 최초 1회한, 계약일부터 1년 미만).",
+    "limit_count": 1,
+    "related_concept": "CPT_SMALL_CANCER_DIAGNOSIS",
+    "source": ":contentReference[oaicite:2]{index=2}"
+  },
+  {
+    "benefit_id": "BEN_106_04",
+    "rider_id": "RIDER_OPT_KA2_1_02",
+    "name": "소액질병진단자금",
+    "disease_type": "기타피부암",
+    "amount_value": 2000000,
+    "amount_text": "200만원",
+    "condition_summary": "보험기간 중 피보험자가 기타피부암으로 진단 확정된 경우(해당 질병 최초 1회한, 계약일부터 1년 이상).",
+    "limit_count": 1,
+    "related_concept": "CPT_SMALL_CANCER_DIAGNOSIS",
+    "source": ":contentReference[oaicite:3]{index=3}"
+  },
+  {
+    "benefit_id": "BEN_106_05",
+    "rider_id": "RIDER_OPT_KA2_1_02",
+    "name": "전이암진단자금",
+    "disease_type": "전이암",
+    "amount_value": 5000000,
+    "amount_text": "500만원",
+    "condition_summary": "보험기간 중 암보장개시일 이후 피보험자가 전이암으로 진단 확정된 경우(최초 1회한, 계약일부터 1년 미만).",
+    "limit_count": 1,
+    "related_concept": "CPT_METASTATIC_CANCER_DIAGNOSIS",
+    "source": ":contentReference[oaicite:4]{index=4}"
+  },
+  {
+    "benefit_id": "BEN_106_06",
+    "rider_id": "RIDER_OPT_KA2_1_02",
+    "name": "전이암진단자금",
+    "disease_type": "전이암",
+    "amount_value": 10000000,
+    "amount_text": "1,000만원",
+    "condition_summary": "보험기간 중 암보장개시일 이후 피보험자가 전이암으로 진단 확정된 경우(최초 1회한, 계약일부터 1년 이상).",
+    "limit_count": 1,
+    "related_concept": "CPT_METASTATIC_CANCER_DIAGNOSIS",
+    "source": ":contentReference[oaicite:5]{index=5}"
+  },
+  {
+  "benefit_id": "BEN_OPT_KA2_1_03_01",
+  "rider_id": "RIDER_OPT_KA2_1_03",
+  "name": "기타피부암·갑상선암 주요치료자금(1년미만)",
+  "disease_type": "기타피부암·갑상선암",
+  "amount_value": 1000000,
+  "amount_text": "매년(매회) 100만원",
+  "condition_summary": "보험기간 중 피보험자가 암보장개시일 이후에 '기타피부암' 또는 '갑상선암'으로 최초 진단이 확정되고, 최초 진단확정일로부터 이후 매년 진단확정일 전일까지 '기타피부암' 또는 '갑상선암'으로 '암 주요치료(암 수술, '항암약물치료', '항암방사선치료')' 중 어느 하나의 치료를 받은 경우(최초 진단확정일로부터 최대 10년간, 매년 1회를 한도로 지급(최대 10회 지급)). 지급금액 경과기간이 1년미만인 경우.",
+  "limit_count": 10,
+  "related_concept": "CPT_SIMILAR_CANCER"
+  },
+  {
+  "benefit_id": "BEN_OPT_KA2_1_03_02",
+  "rider_id": "RIDER_OPT_KA2_1_03",
+  "name": "기타피부암·갑상선암 주요치료자금(1년이상)",
+  "disease_type": "기타피부암·갑상선암",
+  "amount_value": 2000000,
+  "amount_text": "매년(매회) 200만원",
+  "condition_summary": "보험기간 중 피보험자가 암보장개시일 이후에 '기타피부암' 또는 '갑상선암'으로 최초 진단이 확정되고, 최초 진단확정일로부터 이후 매년 진단확정일 전일까지 '기타피부암' 또는 '갑상선암'으로 '암 주요치료(암 수술, '항암약물치료', '항암방사선치료')' 중 어느 하나의 치료를 받은 경우(최초 진단확정일로부터 최대 10년간, 매년 1회를 한도로 지급(최대 10회 지급)). 지급금액 경과기간이 1년이상인 경우.",
+  "limit_count": 10,
+  "related_concept": "CPT_SIMILAR_CANCER"
+  },
+  {
+  "benefit_id": "BEN_OPT_KA2_1_03_03",
+  "rider_id": "RIDER_OPT_KA2_1_03",
+  "name": "암중점치료기관(상급종합병원 포함) 기타피부암·갑상선암 주요치료자금(1년미만)",
+  "disease_type": "기타피부암·갑상선암",
+  "amount_value": 1000000,
+  "amount_text": "매년(매회) 100만원",
+  "condition_summary": "보험기간 중 피보험자가 암보장개시일 이후에 '기타피부암' 또는 '갑상선암'으로 최초 진단이 확정되고, 최초 진단확정일로부터 이후 매년 진단확정일 전일까지 '기타피부암' 또는 '갑상선암'으로 암중점치료기관(상급종합병원 포함)에서 '암 주요치료(암 수술, '항암약물치료', '항암방사선치료')' 중 어느 하나의 치료를 받은 경우(최초 진단확정일로부터 최대 10년간, 매년 1회를 한도로 지급(최대 10회 지급)). 지급금액 경과기간이 1년미만인 경우.",
+  "limit_count": 10,
+  "related_concept": "CPT_SIMILAR_CANCER"
+  },
+  {
+  "benefit_id": "BEN_OPT_KA2_1_03_04",
+  "rider_id": "RIDER_OPT_KA2_1_03",
+  "name": "암중점치료기관(상급종합병원 포함) 기타피부암·갑상선암 주요치료자금(1년이상)",
+  "disease_type": "기타피부암·갑상선암",
+  "amount_value": 2000000,
+  "amount_text": "매년(매회) 200만원",
+  "condition_summary": "보험기간 중 피보험자가 암보장개시일 이후에 '기타피부암' 또는 '갑상선암'으로 최초 진단이 확정되고, 최초 진단확정일로부터 이후 매년 진단확정일 전일까지 '기타피부암' 또는 '갑상선암'으로 암중점치료기관(상급종합병원 포함)에서 '암 주요치료(암 수술, '항암약물치료', '항암방사선치료')' 중 어느 하나의 치료를 받은 경우(최초 진단확정일로부터 최대 10년간, 매년 1회를 한도로 지급(최대 10회 지급)). 지급금액 경과기간이 1년이상인 경우.",
+  "limit_count": 10,
+  "related_concept": "CPT_SIMILAR_CANCER"
+  },
+  {
+    "benefit_id": "BEN_141_01",
+    "rider_id": "RIDER_OPT_KA2_1_04",
+    "name": "암주요치료 자금",
+    "amount_value": 5000000,
+    "amount_text": "매년(매회) 500만원",
+    "condition_summary": "보험기간 중 암보장개시일 이후 암(기타피부암 및 갑상선암 제외)으로 최초 진단이 확정되고, 최초 진단확정일부터 매년 진단확정일 전일까지 해당 암으로 암 주요치료(수술, 항암약물치료, 항암방사선치료) 중 어느 하나의 치료를 받은 경우(최대 10년간 매년 1회, 최대 10회 지급, 계약일부터 1년미만).",
+    "limit_count": 1,
+    "related_concept": "CPT_CANCER_TREATMENT"
+  },
+  {
+    "benefit_id": "BEN_141_02",
+    "rider_id": "RIDER_OPT_KA2_1_04",
+    "name": "암주요치료 자금",
+    "amount_value": 10000000,
+    "amount_text": "매년(매회) 1,000만원",
+    "condition_summary": "보험기간 중 암보장개시일 이후 암(기타피부암 및 갑상선암 제외)으로 최초 진단이 확정되고, 최초 진단확정일부터 매년 진단확정일 전일까지 해당 암으로 암 주요치료(수술, 항암약물치료, 항암방사선치료) 중 어느 하나의 치료를 받은 경우(최대 10년간 매년 1회, 최대 10회 지급, 계약일부터 1년이상).",
+    "limit_count": 1,
+    "related_concept": "CPT_CANCER_TREATMENT"
+  },
+  {
+    "benefit_id": "BEN_141_03",
+    "rider_id": "RIDER_OPT_KA2_1_04",
+    "name": "암중점치료 기관(상급종합병원 포함) 암주요치료 자금",
+    "amount_value": 5000000,
+    "amount_text": "매년(매회) 500만원",
+    "condition_summary": "보험기간 중 암보장개시일 이후 암(기타피부암 및 갑상선암 제외)으로 최초 진단이 확정되고, 최초 진단확정일부터 매년 진단확정일 전일까지 암중점치료기관(상급종합병원 포함)에서 해당 암으로 암 주요치료 중 어느 하나의 치료를 받은 경우(최대 10년간 매년 1회, 최대 10회 지급, 계약일부터 1년미만).",
+    "limit_count": 1,
+    "related_concept": "CPT_CANCER_TREATMENT"
+  },
+  {
+    "benefit_id": "BEN_141_04",
+    "rider_id": "RIDER_OPT_KA2_1_04",
+    "name": "암중점치료 기관(상급종합병원 포함) 암주요치료 자금",
+    "amount_value": 10000000,
+    "amount_text": "매년(매회) 1,000만원",
+    "condition_summary": "보험기간 중 암보장개시일 이후 암(기타피부암 및 갑상선암 제외)으로 최초 진단이 확정되고, 최초 진단확정일부터 매년 진단확정일 전일까지 암중점치료기관(상급종합병원 포함)에서 해당 암으로 암 주요치료 중 어느 하나의 치료를 받은 경우(최대 10년간 매년 1회, 최대 10회 지급, 계약일부터 1년이상).",
+    "limit_count": 1,
+    "related_concept": "CPT_CANCER_TREATMENT"
+  },
+  {
+    "benefit_id": "BEN_158_01",
+    "rider_id": "RIDER_OPT_KA2_1_05",
+    "name": "암통원(당일입원 포함)자금",
+    "amount_value": 10000,
+    "amount_text": "1회당 1만원",
+    "condition_summary": "보험기간 중 암보장개시일 이후 암(기타피부암 및 대장점막내암 제외)으로 진단이 확정되고, 해당 암의 직접적인 치료를 목적으로 병원 또는 의원에서 통원(당일입원 포함) 치료를 받은 경우 1일 1회, 연간 30회 한도로 지급.",
+    "limit_count": 30,
+    "related_concept": "CPT_CANCER_TREATMENT"
+  },
+  {
+    "benefit_id": "BEN_158_02",
+    "rider_id": "RIDER_OPT_KA2_1_05",
+    "name": "통원(당일입원 포함)자금",
+    "amount_value": 10000,
+    "amount_text": "1회당 1만원",
+    "condition_summary": "보험기간 중 기타피부암, 대장점막내암, 제자리암 또는 경계성종양으로 진단이 확정되고, 해당 질병의 직접적인 치료를 목적으로 병원 또는 의원에서 통원(당일입원 포함) 치료를 받은 경우 1일 1회, 연간 30회 한도로 지급.",
+    "limit_count": 30,
+    "related_concept": "CPT_CANCER_TREATMENT"
+  },
+  {
+    "benefit_id": "BEN_158_03",
+    "rider_id": "RIDER_OPT_KA2_1_05",
+    "name": "종합병원 암통원(당일입원 포함)자금",
+    "amount_value": 10000,
+    "amount_text": "1회당 1만원",
+    "condition_summary": "보험기간 중 암보장개시일 이후 암(기타피부암 및 대장점막내암 제외)으로 진단이 확정되고, 해당 암의 직접적인 치료를 목적으로 종합병원에서 통원(당일입원 포함) 치료를 받은 경우 1일 1회, 연간 30회 한도로 지급.",
+    "limit_count": 30,
+    "related_concept": "CPT_CANCER_TREATMENT"
+  },
+  {
+    "benefit_id": "BEN_158_04",
+    "rider_id": "RIDER_OPT_KA2_1_05",
+    "name": "종합병원 통원(당일입원 포함)자금",
+    "amount_value": 10000,
+    "amount_text": "1회당 1만원",
+    "condition_summary": "보험기간 중 기타피부암, 대장점막내암, 제자리암 또는 경계성종양으로 진단이 확정되고, 해당 질병의 직접적인 치료를 목적으로 종합병원에서 통원(당일입원 포함) 치료를 받은 경우 1일 1회, 연간 30회 한도로 지급.",
+    "limit_count": 30,
+    "related_concept": "CPT_CANCER_TREATMENT"
+  },
+  {
+    "benefit_id": "BEN_158_05",
+    "rider_id": "RIDER_OPT_KA2_1_05",
+    "name": "상급종합병원 암통원(당일입원 포함)자금",
+    "amount_value": 10000,
+    "amount_text": "1회당 1만원",
+    "condition_summary": "보험기간 중 암보장개시일 이후 암(기타피부암 및 대장점막내암 제외)으로 진단이 확정되고, 해당 암의 직접적인 치료를 목적으로 상급종합병원에서 통원(당일입원 포함) 치료를 받은 경우 1일 1회, 연간 30회 한도로 지급.",
+    "limit_count": 30,
+    "related_concept": "CPT_CANCER_TREATMENT"
+  },
+  {
+    "benefit_id": "BEN_158_06",
+    "rider_id": "RIDER_OPT_KA2_1_05",
+    "name": "상급종합병원 통원(당일입원 포함)자금",
+    "amount_value": 10000,
+    "amount_text": "1회당 1만원",
+    "condition_summary": "보험기간 중 기타피부암, 대장점막내암, 제자리암 또는 경계성종양으로 진단이 확정되고, 해당 질병의 직접적인 치료를 목적으로 상급종합병원에서 통원(당일입원 포함) 치료를 받은 경우 1일 1회, 연간 30회 한도로 지급.",
+    "limit_count": 30,
+    "related_concept": "CPT_CANCER_TREATMENT"
+  },
+  {
+    "benefit_id": "BEN_177_01",
+    "rider_id": "RIDER_OPT_KA2_1_06",
+    "name": "암직접치료 입원급여금",
+    "amount_value": 10000,
+    "amount_text": "1일당 1만원",
+    "condition_summary": "보험기간 중 암보장개시일 이후 ‘암(기타피부암, 대장점막내암 제외)’으로 진단 확정되고 해당 암의 직접적인 치료를 목적으로 1일 이상 입원한 경우(1회 입원당 120일 한도), 계약일부터 1년 미만 경과 시 지급",
+    "limit_count": 120,
+    "related_concept": "CPT_CANCER"
+  },
+  {
+    "benefit_id": "BEN_177_02",
+    "rider_id": "RIDER_OPT_KA2_1_06",
+    "name": "암직접치료 입원급여금",
+    "amount_value": 20000,
+    "amount_text": "1일당 2만원",
+    "condition_summary": "보험기간 중 암보장개시일 이후 ‘암(기타피부암, 대장점막내암 제외)’으로 진단 확정되고 해당 암의 직접적인 치료를 목적으로 1일 이상 입원한 경우(1회 입원당 120일 한도), 계약일부터 1년 이상 경과 시 지급",
+    "limit_count": 120,
+    "related_concept": "CPT_CANCER"
+  },
+  {
+    "benefit_id": "BEN_177_03",
+    "rider_id": "RIDER_OPT_KA2_1_06",
+    "name": "암직접치료 입원급여금",
+    "amount_value": 5000,
+    "amount_text": "1일당 5천원",
+    "condition_summary": "보험기간 중 ‘기타피부암’, ‘대장점막내암’, ‘제자리암’ 또는 ‘경계성종양’으로 진단 확정되고 해당 질병의 직접적인 치료를 목적으로 1일 이상 입원한 경우(1회 입원당 120일 한도), 계약일부터 1년 미만 경과 시 지급",
+    "limit_count": 120,
+    "related_concept": "CPT_CANCER"
+  },
+  {
+    "benefit_id": "BEN_177_04",
+    "rider_id": "RIDER_OPT_KA2_1_06",
+    "name": "암직접치료 입원급여금",
+    "amount_value": 10000,
+    "amount_text": "1일당 1만원",
+    "condition_summary": "보험기간 중 ‘기타피부암’, ‘대장점막내암’, ‘제자리암’ 또는 ‘경계성종양’으로 진단 확정되고 해당 질병의 직접적인 치료를 목적으로 1일 이상 입원한 경우(1회 입원당 120일 한도), 계약일부터 1년 이상 경과 시 지급",
+    "limit_count": 120,
+    "related_concept": "CPT_CANCER"
+  },
+  {
+    "benefit_id": "BEN_192_01",
+    "rider_id": "RIDER_OPT_KA2_1_07",
+    "name": "요양병원 암입원급여금",
+    "amount_value": 10000,
+    "amount_text": "1일당 1만원",
+    "condition_summary": "보험기간 중 암보장개시일 이후 암(기타피부암, 대장점막내암 제외)으로 진단이 확정되고 해당 암의 치료를 목적으로 1일 이상 요양병원에 입원한 경우(1회 입원당 60일 한도, 누적 지급일수 365일 한도, 계약일부터 1년 미만).",
+    "limit_count": null,
+    "related_concept": "CPT_CANCER_TREATMENT"
+  },
+  {
+    "benefit_id": "BEN_192_02",
+    "rider_id": "RIDER_OPT_KA2_1_07",
+    "name": "요양병원 암입원급여금",
+    "amount_value": 20000,
+    "amount_text": "1일당 2만원",
+    "condition_summary": "보험기간 중 암보장개시일 이후 암(기타피부암, 대장점막내암 제외)으로 진단이 확정되고 해당 암의 치료를 목적으로 1일 이상 요양병원에 입원한 경우(1회 입원당 60일 한도, 누적 지급일수 365일 한도, 계약일부터 1년 이상).",
+    "limit_count": null,
+    "related_concept": "CPT_CANCER_TREATMENT"
+  },
+  {
+    "benefit_id": "BEN_192_03",
+    "rider_id": "RIDER_OPT_KA2_1_07",
+    "name": "요양병원 암입원급여금",
+    "amount_value": 5000,
+    "amount_text": "1일당 5천원",
+    "condition_summary": "보험기간 중 기타피부암, 대장점막내암, 제자리암 또는 경계성종양으로 진단이 확정되고 해당 질병의 치료를 목적으로 1일 이상 요양병원에 입원한 경우(1회 입원당 60일 한도, 누적 지급일수 365일 한도, 계약일부터 1년 미만).",
+    "limit_count": null,
+    "related_concept": "CPT_CANCER_TREATMENT"
+  },
+  {
+    "benefit_id": "BEN_192_04",
+    "rider_id": "RIDER_OPT_KA2_1_07",
+    "name": "요양병원 암입원급여금",
+    "amount_value": 10000,
+    "amount_text": "1일당 1만원",
+    "condition_summary": "보험기간 중 기타피부암, 대장점막내암, 제자리암 또는 경계성종양으로 진단이 확정되고 해당 질병의 치료를 목적으로 1일 이상 요양병원에 입원한 경우(1회 입원당 60일 한도, 누적 지급일수 365일 한도, 계약일부터 1년 이상).",
+    "limit_count": null,
+    "related_concept": "CPT_CANCER_TREATMENT"
+  },
+  {
+    "benefit_id": "BEN_208_01",
+    "rider_id": "RIDER_OPT_KA2_1_08",
+    "name": "표적항암약물 허가치료자금",
+    "amount_value": 5000000,
+    "amount_text": "500만원",
+    "condition_summary": "보험기간 중 암보장개시일 이후 암으로 진단이 확정되고 해당 암의 직접적인 치료를 목적으로 식품의약품안전처 허가사항에 따라 표적항암약물치료를 받은 경우(최초 1회한, 계약일부터 1년 미만).",
+    "limit_count": 1,
+    "related_concept": "CPT_CANCER_TREATMENT"
+  },
+  {
+    "benefit_id": "BEN_208_02",
+    "rider_id": "RIDER_OPT_KA2_1_08",
+    "name": "표적항암약물 허가치료자금",
+    "amount_value": 10000000,
+    "amount_text": "1,000만원",
+    "condition_summary": "보험기간 중 암보장개시일 이후 암으로 진단이 확정되고 해당 암의 직접적인 치료를 목적으로 식품의약품안전처 허가사항에 따라 표적항암약물치료를 받은 경우(최초 1회한, 계약일부터 1년 이상).",
+    "limit_count": 1,
+    "related_concept": "CPT_CANCER_TREATMENT"
+  },
+  {
+    "benefit_id": "BEN_232_01",
+    "rider_id": "RIDER_OPT_KA2_1_09",
+    "name": "항암약물치료자금",
+    "amount_value": 10000000,
+    "amount_text": "1,000만원",
+    "condition_summary": "보험기간 중 피보험자가 암보장개시일 이후 암(기타피부암 및 갑상선암 제외)으로 진단이 확정되고 보험기간 중 그 직접적인 치료를 목적으로 항암약물치료를 받은 경우(최초 1회한).",
+    "limit_count": 1,
+    "related_concept": "CPT_CANCER_TREATMENT"
+  },
+  {
+    "benefit_id": "BEN_232_02",
+    "rider_id": "RIDER_OPT_KA2_1_09",
+    "name": "항암방사선치료자금",
+    "amount_value": 10000000,
+    "amount_text": "1,000만원",
+    "condition_summary": "보험기간 중 피보험자가 암보장개시일 이후 암(기타피부암 및 갑상선암 제외)으로 진단이 확정되고 보험기간 중 그 직접적인 치료를 목적으로 항암방사선치료를 받은 경우(최초 1회한).",
+    "limit_count": 1,
+    "related_concept": "CPT_CANCER_TREATMENT"
+  },
+  {
+    "benefit_id": "BEN_243_01",
+    "rider_id": "RIDER_OPT_KA2_1_10",
+    "name": "항암중입자 방사선치료 자금",
+    "amount_value": 5000000,
+    "amount_text": "500만원",
+    "condition_summary": "보험기간 중 암보장개시일 이후 암으로 진단이 확정되고 보험기간 중 그 직접적인 치료를 목적으로 항암중입자방사선치료를 받은 경우(최초 1회한, 계약일부터 1년 미만).",
+    "limit_count": 1,
+    "related_concept": "CPT_CANCER_TREATMENT"
+  },
+  {
+    "benefit_id": "BEN_243_02",
+    "rider_id": "RIDER_OPT_KA2_1_10",
+    "name": "항암중입자 방사선치료 자금",
+    "amount_value": 10000000,
+    "amount_text": "1,000만원",
+    "condition_summary": "보험기간 중 암보장개시일 이후 암으로 진단이 확정되고 보험기간 중 그 직접적인 치료를 목적으로 항암중입자방사선치료를 받은 경우(최초 1회한, 계약일부터 1년 이상).",
+    "limit_count": 1,
+    "related_concept": "CPT_CANCER_TREATMENT"
+  }
+  
+
+]

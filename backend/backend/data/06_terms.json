@@ -1,0 +1,9 @@
+[
+  {
+    "term_name": "표적항암치료",
+    "category": "Treatment",
+    "synonyms": ["2세대 항암치료", "신표적치료"],
+    "definition": "암세포의 특정 단백질이나 유전자 변화를 표적으로 삼아 공격하는 항암 치료법입니다.",
+    "mapped_concept_id": "CPT_TARGETED_THERAPY"
+  }
+]
