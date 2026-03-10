@@ -1,566 +1,348 @@
 # backend/graph.py
-import asyncio
-import json
-import logging
 import os
+import json
 import re
 import time
-from typing import Any, Dict, List, Optional, TypedDict
-
-from dotenv import load_dotenv
-from langchain_core.prompts import ChatPromptTemplate
+from typing import TypedDict, List, Dict, Any, Optional
+from langgraph.graph import StateGraph, END, START
 from langchain_openai import ChatOpenAI
-from langgraph.graph import END, START, StateGraph
+from langchain_core.prompts import ChatPromptTemplate
+from dotenv import load_dotenv
+from backend.logging_utils import get_logger
 
+# [Turn 3] Logic Layer에서 구현한 검색 함수들 임포트
+# (retrieve_comparison 추가됨)
 from backend.logic.retrievers import (
-    link_concept_candidates,
+    link_concept,
     retrieve_benefit,
-    retrieve_comparison,
-    retrieve_condition,
     retrieve_exclusion,
+    retrieve_condition,
     retrieve_term,
+    retrieve_comparison  # ★ 추가: 상품 비교용 함수
 )
 
+# -------------------------------------------------------------------------
+# 1. 환경 설정 & 모델 초기화
+# -------------------------------------------------------------------------
 load_dotenv()
-logging.basicConfig(
-    level=os.getenv("LOG_LEVEL", "INFO"),
-    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
-)
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 llm = ChatOpenAI(
-    model=os.getenv("LLM_MODEL_NAME", "Qwen/Qwen3.5-9B"),
+    model=os.getenv("LLM_MODEL_NAME", "Qwen/Qwen2.5-7B-Instruct"),
     api_key="EMPTY",
     base_url=os.getenv("LLM_API_BASE", "http://localhost:8000/v1"),
-    temperature=0,
+    temperature=0
 )
 
-
+# -------------------------------------------------------------------------
+# 2. 상태(State) 정의 - Neuro-Symbolic 전용
+# -------------------------------------------------------------------------
 class AgentState(TypedDict):
-    question: str
-    request_id: str
+    """
+    LangGraph의 전체 상태 스키마.
+    각 노드는 이 스키마의 일부(Subset)를 반환하여 상태를 업데이트합니다.
+    """
+    question: str               # 사용자 입력
+    intent: str                 # Router가 분류한 의도
+    keywords: List[str]         # Router가 추출한 핵심어
+    concept_id: Optional[str]   # Grounding된 Concept ID
+    
+    context: List[str]          # Retriever가 가져온 증거 텍스트들
+    final_answer: str           # LLM이 생성한 최종 답변
+    
+    trace_log: List[str]        # 디버깅용 로그
+    node_models: Dict[str, str] # 사용된 모델 기록
+    request_id: Optional[str]    # 요청 추적용 ID
 
-    tasks: List[str]
-    concept_keywords: List[str]
-    product_keywords: List[str]
-    analysis_notes: List[str]
-
-    resolved_concepts: List[Dict[str, Any]]
-    task_plan: List[Dict[str, Any]]
-    task_results: List[Dict[str, Any]]
-    response_sections: List[Dict[str, Any]]
-
-    final_answer: str
-    trace_log: List[str]
-    node_models: Dict[str, str]
-    execution_metrics: Dict[str, Any]
-
-
-TASK_TITLES = {
-    "DEFINE_TERM": "용어 설명",
-    "GET_BENEFIT": "보장 금액/항목",
-    "GET_CONDITION": "지급 조건",
-    "GET_EXCLUSION": "면책/제한",
-    "COMPARE_PRODUCTS": "상품 비교",
-    "CHIT_CHAT": "일반 대화",
-}
-
-SECTION_INSTRUCTIONS = {
-    "DEFINE_TERM": "용어의 의미를 먼저 간단하고 명확하게 설명하세요.",
-    "GET_BENEFIT": "보장 항목과 금액을 정확하게 정리하세요.",
-    "GET_CONDITION": "지급 요건과 시점을 조건 중심으로 설명하세요.",
-    "GET_EXCLUSION": "면책 및 제한 사항을 주의사항처럼 분명하게 설명하세요.",
-    "COMPARE_PRODUCTS": "상품별 차이를 비교 형태로 정리하세요.",
-}
-
-
-ANALYZER_PROMPT = ChatPromptTemplate.from_messages(
-    [
-        (
-            "system",
-            """당신은 보험 QA 분석기다.
-질문을 아래 제한된 task taxonomy 안에서만 분류하라.
-
-허용 task:
-- DEFINE_TERM: 용어 뜻, 정의, 설명
-- GET_BENEFIT: 보장 금액, 얼마, 지급 항목
-- GET_CONDITION: 조건, 시점, 언제부터, 요건
-- GET_EXCLUSION: 면책, 제한, 보장하지 않는 경우
-- COMPARE_PRODUCTS: A와 B 비교, 차이점
-- CHIT_CHAT: 인사, 잡담
-
-규칙:
-1. 최대 3개 task만 반환하라.
-2. 중복 task는 제거하라.
-3. 질문에 직접 드러난 요구만 task로 넣어라.
-4. 내부 구현 단계(grounding, search 등)는 task로 만들지 마라.
-5. 상품명/플랜명/브랜드명/시리즈명처럼 보이는 표현은 product_keywords에 넣어라.
-6. 보장 개념, 질병, 치료, 약관 용어처럼 보이는 표현은 concept_keywords에 넣어라.
-7. JSON만 출력하라.
-
-출력 스키마:
-{
-  "tasks": ["..."],
-  "concept_keywords": ["..."],
-  "product_keywords": ["..."],
-  "notes": ["..."]
-}
-""",
-        ),
-        ("user", "질문: {question}"),
-    ]
-)
-
-GENERATOR_PROMPT = ChatPromptTemplate.from_messages(
-    [
-        (
-            "system",
-            """당신은 보험 QA 어시스턴트다.
-반드시 제공된 섹션 근거만 사용해 답하라.
-추측하거나 빈칸을 채우지 마라.
-
-규칙:
-1. response_sections의 순서를 유지하라.
-2. 각 섹션은 해당 섹션의 evidence만 사용하라.
-3. 섹션 제목을 살려서 답하라.
-4. evidence가 부족한 섹션은 '확인된 근거가 부족하다'고 명시하라.
-5. 마지막에 짧은 요약을 추가하라.
-""",
-        ),
-        (
-            "user",
-            """[질문]
-{question}
-
-[실행된 task]
-{tasks}
-
-[응답 섹션]
-{response_sections}
-
-위 정보를 바탕으로 한국어로 답하라.
-""",
-        ),
-    ]
-)
-
-
+# -------------------------------------------------------------------------
+# 3. Helper 함수
+# -------------------------------------------------------------------------
 def update_trace(state: AgentState, node: str, msg: str) -> List[str]:
+    """로그를 누적 업데이트하는 헬퍼 함수"""
     trace = list(state.get("trace_log", []) or [])
     trace.append(f"[{node}] {msg}")
-    return trace[-50:]
-
-
-
-
-def _req(state: AgentState) -> str:
-    return state.get("request_id", "-")
-
-
-def _ms(start: float) -> int:
-    return int((time.perf_counter() - start) * 1000)
+    return trace[-30:] # 최근 30개 유지
 
 def remove_think_tag(text: str) -> str:
-    if not text:
-        return ""
-    return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
+    """LLM의 <think> 태그 제거 (Qwen 계열 등)"""
+    if not text: return ""
+    return re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL).strip()
 
+# -------------------------------------------------------------------------
+# 4. 프롬프트 정의
+# -------------------------------------------------------------------------
 
-async def node_analyzer(state: AgentState) -> Dict[str, Any]:
-    started = time.perf_counter()
-    logger.info("[Analyzer][%s] question=%s", _req(state), state["question"])
-    tasks: List[str] = ["CHIT_CHAT"]
-    concept_keywords: List[str] = []
-    product_keywords: List[str] = []
-    notes: List[str] = []
+# [Router Prompt]
+ROUTER_PROMPT = """# Role
+You are an intelligent Insurance Chatbot Router.
+Your goal is to analyze the user's input (Korean) and extract structured information.
 
+# Task
+Analyze the User Input and generate a JSON output.
+
+## 1. Classify Intents (Select ONE)
+- **CHECK_BENEFIT**: Payout amount, eligibility. (e.g., "얼마 나와?", "보장 돼?")
+- **CHECK_CONDITION**: Requirements, timing. (e.g., "언제부터?", "수술 꼭 해야 해?")
+- **CHECK_EXCLUSION**: NOT covered cases. (e.g., "면책 사유", "지급 제한")
+- **EXPLAIN_TERM**: Definitions. (e.g., "표적항암이 뭐야?")
+- **COMPARE_PRODUCTSS**: Comparison. (e.g., "A랑 B 차이점")
+- **CHIT_CHAT**: Greetings.
+
+## 2. Extract Entities
+Extract key insurance terms.
+
+## 3. Output Format
+Return **JSON Only**. Keys: "intent", "keywords".
+Example:
+Input: "표적항암 치료비 얼마야?"
+Output: {"intent": "CHECK_BENEFIT", "keywords": ["표적항암"]}
+
+Input: "{question}"
+"""
+
+# [Generator Prompt]
+GENERATOR_PROMPT = """<|im_start|>system
+You are a professional insurance AI assistant.
+Answer the user's question based ONLY on the provided [Context].
+
+### Instructions
+1. **Fact-based**: Use only the information in [Context]. Do not invent facts.
+2. **Persona**:
+   - If intent is CHECK_BENEFIT -> Be precise like an accountant. (Focus on Amount)
+   - If intent is CHECK_EXCLUSION -> Be strict like a lawyer. (Warn about restrictions)
+   - If intent is COMPARE_PRODUCTS -> Be analytical. (Use tables or lists)
+   - Otherwise -> Be helpful and clear.
+3. **Format**:
+   - 결론: (Simple answer)
+   - 근거: (Details from context)
+
+### Context
+{context}
+
+<|im_end|>
+<|im_start|>user
+{question}
+<|im_end|>
+<|im_start|>assistant
+"""
+
+# -------------------------------------------------------------------------
+# 5. 노드(Node) 정의
+# -------------------------------------------------------------------------
+
+async def node_router(state: AgentState) -> Dict[str, Any]:
+    """
+    [Router] 사용자 의도 및 키워드 추출
+    Returns: intent, keywords, trace_log (Partial Update)
+    """
+    chain = ChatPromptTemplate.from_template(ROUTER_PROMPT) | llm
+    request_id = state.get("request_id")
+    started_at = time.perf_counter()
+
+    intent = "CHIT_CHAT"
+    keywords = []
+
+    logger.info("router started", extra={"request_id": request_id})
     try:
-        res = await (ANALYZER_PROMPT | llm).ainvoke({"question": state["question"]})
+        res = await chain.ainvoke({"question": state["question"]})
         clean_json = remove_think_tag(res.content).replace("```json", "").replace("```", "").strip()
         parsed = json.loads(clean_json)
-        tasks = parsed.get("tasks", ["CHIT_CHAT"]) or ["CHIT_CHAT"]
-        concept_keywords = parsed.get("concept_keywords", []) or []
-        product_keywords = parsed.get("product_keywords", []) or []
-        notes = parsed.get("notes", []) or []
-    except Exception as exc:
-        logger.exception("[Analyzer] failed: %s", exc)
-        notes = [f"analyzer_error: {exc}"]
+        
+        intent = parsed.get("intent", "CHIT_CHAT")
+        if isinstance(intent, list): intent = intent[0]
+            
+        keywords = parsed.get("keywords", [])
+        # [{"term": "암", ...}] 형태라면 문자열 리스트로 변환
+        if keywords and isinstance(keywords[0], dict):
+            keywords = [k.get("term", "") for k in keywords]
+            
+    except Exception as e:
+        logger.exception("router failed", extra={"request_id": request_id})
 
-    tasks = _normalize_tasks(tasks)
-    duration_ms = _ms(started)
-    logger.info(
-        "[Analyzer][%s] tasks=%s concept_keywords=%s product_keywords=%s duration_ms=%s",
-        _req(state),
-        tasks,
-        concept_keywords,
-        product_keywords,
-        duration_ms,
-    )
+    duration_ms = round((time.perf_counter() - started_at) * 1000, 2)
+    logger.info("router finished", extra={
+        "request_id": request_id,
+        "intent": intent,
+        "keyword_count": len(keywords),
+        "duration_ms": duration_ms,
+    })
+
     return {
-        "tasks": tasks,
-        "concept_keywords": concept_keywords,
-        "product_keywords": product_keywords,
-        "analysis_notes": notes,
-        "trace_log": update_trace(
-            state,
-            "Analyzer",
-            f"tasks={tasks}, concept_keywords={concept_keywords}, product_keywords={product_keywords}, duration_ms={duration_ms}",
-        ),
+        "intent": intent, 
+        "keywords": keywords,
+        "trace_log": update_trace(state, "Router", f"Intent: {intent}, Keywords: {keywords}")
     }
 
+async def node_retriever(state: AgentState) -> Dict[str, Any]:
+    """
+    [Retriever] 의도에 따른 Logic 함수 호출 (Dispatcher)
+    Returns: concept_id, context, trace_log (Partial Update)
+    """
+    intent = state["intent"]
+    keywords = state["keywords"]
+    request_id = state.get("request_id")
+    started_at = time.perf_counter()
+    logger.info("retriever started", extra={
+        "request_id": request_id,
+        "intent": intent,
+        "keyword_count": len(keywords),
+    })
 
-async def node_grounder(state: AgentState) -> Dict[str, Any]:
-    started = time.perf_counter()
-    keywords = list(dict.fromkeys(state.get("concept_keywords", []) or []))
-    logger.info("[Grounder][%s] keywords=%s", _req(state), keywords)
-    resolved_concepts: List[Dict[str, Any]] = []
+    # 1. Entity Linking (Grounding)
+    concept_id = None
+    product_candidates = [] # 비교 질문용 상품 키워드
 
-    async def _resolve(keyword: str) -> Optional[Dict[str, Any]]:
-        candidates = await link_concept_candidates(keyword, limit=3)
-        if not candidates:
-            return None
-        top = candidates[0]
-        return {
-            "keyword": keyword,
-            "concept_id": top.get("concept_id"),
-            "label_ko": top.get("label_ko"),
-            "category": top.get("category"),
-            "score": round(float(top.get("score", 0.0) or 0.0), 4),
-            "matched_text": top.get("matched_text"),
-            "candidates": candidates,
-        }
-
+    # 키워드 분류: Concept인지 단순 상품명인지 식별
     if keywords:
-        resolved = await asyncio.gather(*[_resolve(k) for k in keywords], return_exceptions=True)
-        for item in resolved:
-            if isinstance(item, Exception):
-                logger.exception("[Grounder] candidate resolution failed: %s", item)
-                continue
-            if item:
-                resolved_concepts.append(item)
-
-    duration_ms = _ms(started)
-    logger.info("[Grounder][%s] resolved=%s duration_ms=%s", _req(state), [x.get("concept_id") for x in resolved_concepts], duration_ms)
-    return {
-        "resolved_concepts": resolved_concepts,
-        "trace_log": update_trace(
-            state,
-            "Grounder",
-            f"resolved={len(resolved_concepts)} concepts, duration_ms={duration_ms}",
-        ),
-    }
-
-
-async def node_planner(state: AgentState) -> Dict[str, Any]:
-    started = time.perf_counter()
-    tasks = _normalize_tasks(state.get("tasks", []))
-    resolved_concepts = state.get("resolved_concepts", []) or []
-    product_keywords = state.get("product_keywords", []) or []
-    concept_keywords = state.get("concept_keywords", []) or []
-
-    if tasks == ["CHIT_CHAT"]:
-        plan = [{
-            "task_id": "task_1",
-            "task_type": "CHIT_CHAT",
-            "title": TASK_TITLES["CHIT_CHAT"],
-            "inputs": {},
-            "depends_on": [],
-            "priority": 1,
-        }]
-    else:
-        plan = []
-        for idx, task_type in enumerate(tasks[:3], start=1):
-            inputs: Dict[str, Any] = {}
-            if task_type == "COMPARE_PRODUCTS":
-                inputs = {
-                    "concept_id": resolved_concepts[0].get("concept_id") if resolved_concepts else None,
-                    "product_keywords": product_keywords,
-                }
-            elif task_type == "DEFINE_TERM":
-                inputs = {
-                    "keyword": concept_keywords[0] if concept_keywords else "",
-                    "concept_id": resolved_concepts[0].get("concept_id") if resolved_concepts else None,
-                }
+        for k in keywords:
+            # 하나라도 Concept으로 링크되면 그것을 주제로 삼음
+            linked = await link_concept(k, request_id=request_id)
+            if linked and not concept_id:
+                concept_id = linked.get("concept_id")
             else:
-                inputs = {
-                    "concept_id": resolved_concepts[0].get("concept_id") if resolved_concepts else None,
-                }
-            plan.append(
-                {
-                    "task_id": f"task_{idx}",
-                    "task_type": task_type,
-                    "title": TASK_TITLES.get(task_type, task_type),
-                    "inputs": inputs,
-                    "depends_on": ["grounding"] if task_type not in {"CHIT_CHAT", "DEFINE_TERM"} else [],
-                    "priority": idx,
-                }
-            )
-
-    logger.info("[Planner][%s] plan=%s duration_ms=%s", _req(state), plan, _ms(started))
-    return {
-        "task_plan": plan,
-        "trace_log": update_trace(state, "Planner", f"planned={len(plan)} tasks, duration_ms={_ms(started)}"),
-    }
-
-
-async def _execute_task(plan_item: Dict[str, Any], state: AgentState) -> Dict[str, Any]:
-    started = time.perf_counter()
-    task_type = plan_item["task_type"]
-    inputs = plan_item.get("inputs", {})
-    resolved_concepts = state.get("resolved_concepts", []) or []
-    logger.info("[Executor][%s] start task=%s inputs=%s", _req(state), task_type, inputs)
-
-    result: Dict[str, Any] = {
-        "task_id": plan_item["task_id"],
-        "task_type": task_type,
-        "title": plan_item["title"],
-        "status": "success",
-        "resolved_concepts": resolved_concepts,
-        "evidence": [],
-        "summary": "",
-        "error": None,
-        "duration_ms": None,
-        "evidence_count": 0,
-    }
-
+                product_candidates.append(k) # Concept이 아니면 상품명으로 간주
+    
+    context_data = []
+    log_msg = ""
+    
     try:
-        if task_type == "DEFINE_TERM":
-            keyword = inputs.get("keyword") or (state.get("concept_keywords") or [""])[0]
-            res = await retrieve_term(keyword)
-            if res:
-                result["evidence"] = [res]
-                result["summary"] = f"용어 정의 1건 확보 ({res.get('source')})"
+        if intent == "CHIT_CHAT":
+            log_msg = "Skipped retrieval"
+        elif intent == "COMPARE_PRODUCTS":
+            # [추가된 로직] 상품 비교
+            if not concept_id:
+                # 비교 기준(표적항암 등)이 없으면 에러 메시지
+                context_data = ["비교할 기준(예: 표적항암, 수술비)을 찾지 못했습니다."]
+                log_msg = "Comparison failed (No concept)"
             else:
-                result["status"] = "no_evidence"
-                result["summary"] = "용어 정의를 찾지 못함"
+                # Logic Layer 호출
+                comp_result = await retrieve_comparison(concept_id, product_candidates)
+                for prod, info in comp_result.items():
+                    if isinstance(info, str):
+                        context_data.append(f"상품 '{prod}': {info}")
+                    else:
+                        context_data.append(
+                            f"■ 상품: {info['product_name']}\n"
+                            f"  - 특약: {info['rider_name']} ({info['renewal_type']})\n"
+                            f"  - 보장: {info['benefit_name']} ({info['amount']})"
+                        )
+                log_msg = f"Compared {len(product_candidates)} products"
 
-        elif task_type == "GET_BENEFIT":
-            concept_id = inputs.get("concept_id")
-            if concept_id:
-                res = await retrieve_benefit(concept_id)
-                result["evidence"] = res
-                result["status"] = "success" if res else "no_evidence"
-                result["summary"] = f"보장 정보 {len(res)}건 확보"
-            else:
-                result["status"] = "no_evidence"
-                result["summary"] = "개념 grounding 실패로 보장 조회 불가"
+        elif not concept_id:
+             # 다른 인텐트인데 Concept을 못 찾음 -> 단순 용어 검색으로 Fallback
+             search_term = keywords[0] if keywords else ""
+             res = await retrieve_term(search_term)
+             if res: 
+                 context_data = [f"용어 정의: {res['definition']}"]
+             else:
+                 context_data = ["관련된 보험 용어나 개념을 찾을 수 없습니다."]
+             log_msg = "Fallback to Term Search"
+             
+        elif intent == "CHECK_BENEFIT":
+            res = await retrieve_benefit(concept_id)
+            context_data = [f"보장명: {r['benefit_name']} | 금액: {r['amount']} | 한도: {r['limit']}" for r in res]
+            log_msg = f"Retrieved {len(res)} benefits"
+            
+        elif intent == "CHECK_EXCLUSION":
+            res = await retrieve_exclusion(concept_id)
+            context_data = [f"면책조항: {r['text']} (검증됨)" for r in res]
+            log_msg = f"Retrieved {len(res)} exclusions"
+            
+        elif intent == "CHECK_CONDITION":
+            res = await retrieve_condition(concept_id)
+            context_data = [f"조건: {r['condition_detail']}" for r in res]
+            log_msg = f"Retrieved {len(res)} conditions"
+            
+        elif intent == "EXPLAIN_TERM":
+            res = await retrieve_term(keywords[0] if keywords else "")
+            if res: 
+                context_data = [f"정의: {res['definition']} (출처: {res['category']})"]
+            log_msg = "Term retrieved"
+            
+    except Exception as e:
+        log_msg = f"Error: {str(e)}"
+        context_data = [f"시스템 오류 발생: {str(e)}"]
 
-        elif task_type == "GET_CONDITION":
-            concept_id = inputs.get("concept_id")
-            if concept_id:
-                res = await retrieve_condition(concept_id)
-                result["evidence"] = res
-                result["status"] = "success" if res else "no_evidence"
-                result["summary"] = f"지급 조건 {len(res)}건 확보"
-            else:
-                result["status"] = "no_evidence"
-                result["summary"] = "개념 grounding 실패로 조건 조회 불가"
+    duration_ms = round((time.perf_counter() - started_at) * 1000, 2)
+    logger.info("retriever finished", extra={
+        "request_id": request_id,
+        "intent": intent,
+        "concept_id": concept_id,
+        "product_candidate_count": len(product_candidates),
+        "context_count": len(context_data),
+        "duration_ms": duration_ms,
+    })
 
-        elif task_type == "GET_EXCLUSION":
-            concept_id = inputs.get("concept_id")
-            if concept_id:
-                res = await retrieve_exclusion(concept_id)
-                result["evidence"] = res
-                result["status"] = "success" if res else "no_evidence"
-                result["summary"] = f"면책/제한 {len(res)}건 확보"
-            else:
-                result["status"] = "no_evidence"
-                result["summary"] = "개념 grounding 실패로 면책 조회 불가"
-
-        elif task_type == "COMPARE_PRODUCTS":
-            concept_id = inputs.get("concept_id")
-            product_keywords = inputs.get("product_keywords") or []
-            if concept_id and len(product_keywords) >= 1:
-                res = await retrieve_comparison(concept_id, product_keywords)
-                result["evidence"] = [res]
-                result["status"] = "success" if res else "no_evidence"
-                result["summary"] = f"상품 비교 {len(product_keywords)}개 키워드 처리"
-            else:
-                result["status"] = "no_evidence"
-                result["summary"] = "비교 기준 concept 또는 상품 키워드 부족"
-
-        elif task_type == "CHIT_CHAT":
-            result["summary"] = "일반 대화 - retrieval 생략"
-
-    except Exception as exc:
-        logger.exception("[Executor][%s] task failed task=%s: %s", _req(state), task_type, exc)
-        result["status"] = "error"
-        result["error"] = str(exc)
-        result["summary"] = f"task 실행 중 오류: {exc}"
-
-    result["duration_ms"] = _ms(started)
-    result["evidence_count"] = len(result.get("evidence", []))
-    logger.info(
-        "[Executor][%s] done task=%s status=%s evidence=%s duration_ms=%s",
-        _req(state),
-        task_type,
-        result["status"],
-        result["evidence_count"],
-        result["duration_ms"],
-    )
-    return result
-
-
-async def node_executor(state: AgentState) -> Dict[str, Any]:
-    started = time.perf_counter()
-    task_plan = state.get("task_plan", []) or []
-    if not task_plan:
-        return {
-            "task_results": [],
-            "trace_log": update_trace(state, "Executor", "planned tasks not found"),
-        }
-
-    runnable = [item for item in task_plan if item["task_type"] != "CHIT_CHAT"]
-    results: List[Dict[str, Any]] = []
-
-    if runnable:
-        gathered = await asyncio.gather(*[_execute_task(item, state) for item in runnable], return_exceptions=True)
-        for item, output in zip(runnable, gathered):
-            if isinstance(output, Exception):
-                logger.exception("[Executor][%s] task crashed task=%s", _req(state), item["task_type"])
-                results.append(
-                    {
-                        "task_id": item["task_id"],
-                        "task_type": item["task_type"],
-                        "title": item["title"],
-                        "status": "error",
-                        "resolved_concepts": state.get("resolved_concepts", []),
-                        "evidence": [],
-                        "summary": f"task crash: {output}",
-                        "error": str(output),
-                    }
-                )
-            else:
-                results.append(output)
-    else:
-        results.append(
-            {
-                "task_id": "task_1",
-                "task_type": "CHIT_CHAT",
-                "title": TASK_TITLES["CHIT_CHAT"],
-                "status": "success",
-                "resolved_concepts": [],
-                "evidence": [],
-                "summary": "일반 대화 - retrieval 생략",
-                "error": None,
-            }
-        )
-
-    duration_ms = _ms(started)
-    trace_msg = ", ".join([f"{r['task_type']}:{r['status']}:{r.get('duration_ms',0)}ms" for r in results])
-    logger.info("[Executor][%s] completed tasks=%s duration_ms=%s", _req(state), len(results), duration_ms)
     return {
-        "task_results": results,
-        "trace_log": update_trace(state, "Executor", f"{trace_msg} | duration_ms={duration_ms}"),
+        "concept_id": concept_id,
+        "context": context_data,
+        "trace_log": update_trace(state, "Retriever", log_msg)
     }
-
-
-async def node_composer(state: AgentState) -> Dict[str, Any]:
-    started = time.perf_counter()
-    task_results = state.get("task_results", []) or []
-    sections: List[Dict[str, Any]] = []
-
-    for item in task_results:
-        if item["task_type"] == "CHIT_CHAT":
-            continue
-        sections.append(
-            {
-                "title": item["title"],
-                "task_id": item["task_id"],
-                "task_type": item["task_type"],
-                "instruction": SECTION_INSTRUCTIONS.get(item["task_type"], "근거 중심으로 설명하세요."),
-                "status": item["status"],
-                "summary": item.get("summary", ""),
-                "evidence": item.get("evidence", []),
-                "evidence_count": item.get("evidence_count", len(item.get("evidence", []))),
-                "duration_ms": item.get("duration_ms"),
-            }
-        )
-
-    logger.info("[Composer][%s] sections=%s duration_ms=%s", _req(state), len(sections), _ms(started))
-    return {
-        "response_sections": sections,
-        "trace_log": update_trace(state, "Composer", f"sections={len(sections)}, duration_ms={_ms(started)}"),
-    }
-
 
 async def node_generator(state: AgentState) -> Dict[str, Any]:
-    started = time.perf_counter()
-    task_types = state.get("tasks", []) or []
+    """
+    [Generator] 최종 답변 생성
+    Returns: final_answer, trace_log (Partial Update)
+    """
+    request_id = state.get("request_id")
+    started_at = time.perf_counter()
+    logger.info("generator started", extra={
+        "request_id": request_id,
+        "intent": state.get("intent"),
+        "context_count": len(state.get("context", []) or []),
+    })
 
-    if task_types == ["CHIT_CHAT"]:
-        logger.info("[Generator][%s] chit-chat mode", _req(state))
+    if state["intent"] == "CHIT_CHAT":
         res = await llm.ainvoke(state["question"])
+        duration_ms = round((time.perf_counter() - started_at) * 1000, 2)
+        logger.info("generator finished", extra={
+            "request_id": request_id,
+            "intent": state.get("intent"),
+            "duration_ms": duration_ms,
+            "response_len": len(remove_think_tag(res.content)),
+        })
         return {
             "final_answer": remove_think_tag(res.content),
-            "trace_log": update_trace(state, "Generator", f"chit-chat response, duration_ms={_ms(started)}"),
+            "trace_log": update_trace(state, "Generator", "Chit-chat response")
         }
 
-    sections = state.get("response_sections", []) or []
-    if not sections:
-        sections = [
-            {
-                "title": "확인 결과",
-                "task_type": "NONE",
-                "instruction": "관련 근거 부족을 명시하세요.",
-                "status": "no_evidence",
-                "summary": "검색된 근거가 없습니다.",
-                "evidence": [],
-            }
-        ]
+    context_text = "\n\n".join(state["context"])
+    if not context_text:
+        context_text = "관련된 정보를 찾을 수 없습니다."
+        
+    chain = ChatPromptTemplate.from_template(GENERATOR_PROMPT) | llm
+    
+    res = await chain.ainvoke({
+        "question": state["question"],
+        "context": context_text
+    })
 
-    payload_sections = json.dumps(sections, ensure_ascii=False, indent=2)
-    payload_tasks = json.dumps(task_types, ensure_ascii=False)
-    logger.info("[Generator][%s] generating tasks=%s sections=%s", _req(state), task_types, len(sections))
-
-    res = await (GENERATOR_PROMPT | llm).ainvoke(
-        {
-            "question": state["question"],
-            "tasks": payload_tasks,
-            "response_sections": payload_sections,
-        }
-    )
+    clean_answer = remove_think_tag(res.content)
+    duration_ms = round((time.perf_counter() - started_at) * 1000, 2)
+    logger.info("generator finished", extra={
+        "request_id": request_id,
+        "intent": state.get("intent"),
+        "duration_ms": duration_ms,
+        "response_len": len(clean_answer),
+    })
 
     return {
-        "final_answer": remove_think_tag(res.content),
-        "trace_log": update_trace(state, "Generator", f"response generated, duration_ms={_ms(started)}"),
+        "final_answer": clean_answer,
+        "trace_log": update_trace(state, "Generator", "Response generated")
     }
 
-
-def _normalize_tasks(tasks: List[str]) -> List[str]:
-    allowed = {
-        "DEFINE_TERM",
-        "GET_BENEFIT",
-        "GET_CONDITION",
-        "GET_EXCLUSION",
-        "COMPARE_PRODUCTS",
-        "CHIT_CHAT",
-    }
-    normalized: List[str] = []
-    for task in tasks or []:
-        if task in allowed and task not in normalized:
-            normalized.append(task)
-    if not normalized:
-        normalized = ["CHIT_CHAT"]
-    if "CHIT_CHAT" in normalized and len(normalized) > 1:
-        normalized = [t for t in normalized if t != "CHIT_CHAT"]
-    return normalized[:3]
-
-
+# -------------------------------------------------------------------------
+# 6. 그래프 조립
+# -------------------------------------------------------------------------
 workflow = StateGraph(AgentState)
-workflow.add_node("analyzer", node_analyzer)
-workflow.add_node("grounder", node_grounder)
-workflow.add_node("planner", node_planner)
-workflow.add_node("executor", node_executor)
-workflow.add_node("composer", node_composer)
+
+workflow.add_node("router", node_router)
+workflow.add_node("retriever", node_retriever)
 workflow.add_node("generator", node_generator)
 
-workflow.add_edge(START, "analyzer")
-workflow.add_edge("analyzer", "grounder")
-workflow.add_edge("grounder", "planner")
-workflow.add_edge("planner", "executor")
-workflow.add_edge("executor", "composer")
-workflow.add_edge("composer", "generator")
+workflow.add_edge(START, "router")
+workflow.add_edge("router", "retriever")
+workflow.add_edge("retriever", "generator")
 workflow.add_edge("generator", END)
 
 app_graph = workflow.compile()

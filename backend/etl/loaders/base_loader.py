@@ -1,10 +1,14 @@
+import os
 import json
 from abc import ABC, abstractmethod
+from typing import Any, Dict, Optional
 from backend.etl.common import DBContext
+from backend.logging_utils import get_logger
 
 class BaseLoader(ABC):
     def __init__(self, context: DBContext):
         self.ctx = context
+        self.logger = get_logger(f"{__name__}.{self.__class__.__name__}")
         self.qdrant = context.qdrant
         self.graph = context.graph
         self.model = context.embed_model
@@ -27,6 +31,42 @@ class BaseLoader(ABC):
         with open(path, 'w', encoding='utf-8') as f:
             json.dump(data_list, f, ensure_ascii=False, indent=2)
         print(f"🐞 [Debug] Saved processed data to {path}")
+
+
+    def _preview_text(self, text: Optional[str], limit: int = 50) -> str:
+        if not text:
+            return ""
+        normalized = str(text).replace("\n", " ").strip()
+        return normalized[:limit]
+
+    def _log_vector_payload_preview(self, *, collection: str, data_type: str, data_id: str, vector_text: str, payload: Dict[str, Any]):
+        payload_preview = {
+            key: value
+            for key, value in payload.items()
+            if key != "text"
+        }
+        self.logger.info(
+            "vector payload preview",
+            extra={
+                "collection": collection,
+                "data_type": data_type,
+                "data_id": data_id,
+                "vector_text_preview": self._preview_text(vector_text),
+                "vector_text_length": len(vector_text or ""),
+                "payload_keys": sorted(list(payload.keys())),
+                "payload_preview": payload_preview,
+            },
+        )
+
+    def _log_upsert_summary(self, *, collection: str, data_type: str, count: int):
+        self.logger.info(
+            "vector upsert finished",
+            extra={
+                "collection": collection,
+                "data_type": data_type,
+                "count": count,
+            },
+        )
 
     @abstractmethod
     def run(self, file_path: str, target_mode: str = "all"):  # <--- [수정] 인자 추가

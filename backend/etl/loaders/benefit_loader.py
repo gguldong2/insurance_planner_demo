@@ -4,7 +4,7 @@ from .base_loader import BaseLoader
 class BenefitLoader(BaseLoader):
     def run(self, file_path, target_mode="all"):
         data = self.load_json(file_path)
-        print(f"💎 [Benefit] Processing {len(data)} items... (Target: {target_mode})")
+        self.logger.info("loader processing", extra={"loader": "benefit", "count": len(data), "target_mode": target_mode})
         
         points = []
         debug_list = []
@@ -50,6 +50,7 @@ class BenefitLoader(BaseLoader):
                 debug_item = payload.copy()
                 debug_item["_vector_text"] = text_chunk
                 debug_list.append(debug_item)
+                self._log_vector_payload_preview(collection="insurance_knowledge", data_type="benefit", data_id=b["benefit_id"], vector_text=text_chunk, payload=payload)
         
         if points and target_mode in ["all", "vector"]:
             self.qdrant.upsert(collection_name="insurance_knowledge", points=points)

@@ -4,11 +4,11 @@ from .base_loader import BaseLoader
 class TermLoader(BaseLoader):
     def run(self, file_path, target_mode="all"):
         if target_mode == "graph":
-            print(f"📖 [Term] Skipping (Target is graph only)")
+            self.logger.info("loader skipped", extra={"loader": "term", "reason": "graph target only"})
             return
 
         data = self.load_json(file_path)
-        print(f"📖 [Term] Loading {len(data)} items...")
+        self.logger.info("loader processing", extra={"loader": "term", "count": len(data), "target_mode": target_mode})
         
         points = []
         debug_list = []
@@ -34,6 +34,7 @@ class TermLoader(BaseLoader):
             debug_item = payload.copy()
             debug_item["_vector_text"] = text_chunk
             debug_list.append(debug_item)
+            self._log_vector_payload_preview(collection="glossary", data_type="term", data_id=t["term_name"], vector_text=text_chunk, payload=payload)
             
         if points:
             self.qdrant.upsert(collection_name="glossary", points=points)

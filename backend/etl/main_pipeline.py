@@ -1,6 +1,10 @@
 import sys
 import os
 import argparse
+import time
+from backend.logging_utils import get_logger
+
+logger = get_logger(__name__)
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
 
@@ -24,7 +28,8 @@ def main():
     
     args = parser.parse_args()
 
-    print(f"=== 🏁 Start ETL Pipeline [Target: {args.target.upper()} | Loader: {args.loader.upper()}] ===")
+    pipeline_started = time.perf_counter()
+    logger.info("etl pipeline started", extra={"target": args.target, "loader": args.loader})
     
     ctx = DBContext()
     
@@ -47,9 +52,12 @@ def main():
             # 2. 파일 존재 확인 및 실행
             if os.path.exists(file_path):
                 # target_mode 전달
+                step_started = time.perf_counter()
+                logger.info("etl loader started", extra={"loader": name, "target": args.target, "file_path": file_path})
                 loader.run(file_path, target_mode=args.target)
+                logger.info("etl loader finished", extra={"loader": name, "target": args.target, "file_path": file_path, "duration_ms": round((time.perf_counter() - step_started) * 1000, 2)})
             else:
-                print(f"⚠️ Skip {name}: File not found ({file_path})")
+                logger.warning("etl loader skipped missing file", extra={"loader": name, "file_path": file_path})
 
         print("\n=== 🎉 Pipeline Finished ===")
 

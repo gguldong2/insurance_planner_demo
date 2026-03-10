@@ -6,13 +6,15 @@ from FlagEmbedding import BGEM3FlagModel
 # (Turn 1에서 만든 GraphLoader가 있다고 가정)
 from backend.db.graph_connector import GraphLoader 
 from dotenv import load_dotenv
+from backend.logging_utils import get_logger
 
 load_dotenv()
+logger = get_logger(__name__)
 
 class DBContext:
     """DB 연결 및 모델 로딩을 관리하는 Context Manager"""
     def __init__(self):
-        print("🔌 [ETL] Connecting to DBs & Loading Model...")
+        logger.info("etl context initializing")
         
         # 1. Qdrant 연결
         self.qdrant = QdrantClient(url=os.getenv("QDRANT_URL", "http://localhost:6333"))
@@ -22,7 +24,7 @@ class DBContext:
         
         # 3. Embedding Model (GPU 확인)
         device = "cuda" if torch.cuda.is_available() else "cpu"
-        print(f"🚀 Embedding Device: {device}")
+        logger.info("embedding model initialized", extra={"device": device, "model_name": "BAAI/bge-m3"})
         self.embed_model = BGEM3FlagModel("BAAI/bge-m3", use_fp16=True, device=device)
         
         # 4. 컬렉션 사전 생성 (Turn 1 로직 통합)
@@ -40,4 +42,4 @@ class DBContext:
 
     def close(self):
         self.graph.close()
-        print("🔌 [ETL] DB Connection Closed.")
+        logger.info("etl context closed")

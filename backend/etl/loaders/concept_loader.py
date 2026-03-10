@@ -4,7 +4,7 @@ from .base_loader import BaseLoader
 class ConceptLoader(BaseLoader):
     def run(self, file_path, target_mode="all"):
         data = self.load_json(file_path)
-        print(f"🧠 [Concept] Processing {len(data)} items... (Target: {target_mode})")
+        self.logger.info("loader processing", extra={"loader": "concept", "count": len(data), "target_mode": target_mode})
         
         points = []
         debug_list = []
@@ -35,6 +35,7 @@ class ConceptLoader(BaseLoader):
                 debug_item = cpt.copy()
                 debug_item["_vector_text"] = text
                 debug_list.append(debug_item)
+                self._log_vector_payload_preview(collection="concepts", data_type="concept", data_id=cpt["concept_id"], vector_text=text, payload=cpt)
             
         if points and target_mode in ["all", "vector"]:
             self.qdrant.upsert(collection_name="concepts", points=points)
