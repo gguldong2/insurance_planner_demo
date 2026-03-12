@@ -1,3 +1,4 @@
+import logging
 import os
 import torch
 from qdrant_client import QdrantClient
@@ -6,10 +7,11 @@ from FlagEmbedding import BGEM3FlagModel
 # (Turn 1에서 만든 GraphLoader가 있다고 가정)
 from backend.db.graph_connector import GraphLoader 
 from dotenv import load_dotenv
-from backend.logging_utils import get_logger
+from backend.logging_utils import setup_logging
 
 load_dotenv()
-logger = get_logger(__name__)
+setup_logging()
+logger = logging.getLogger(__name__)
 
 class DBContext:
     """DB 연결 및 모델 로딩을 관리하는 Context Manager"""
@@ -24,7 +26,7 @@ class DBContext:
         
         # 3. Embedding Model (GPU 확인)
         device = "cuda" if torch.cuda.is_available() else "cpu"
-        logger.info("embedding model initialized", extra={"device": device, "model_name": "BAAI/bge-m3"})
+        logger.info("etl embedding model ready", extra={"device": device, "model_name": "BAAI/bge-m3"})
         self.embed_model = BGEM3FlagModel("BAAI/bge-m3", use_fp16=True, device=device)
         
         # 4. 컬렉션 사전 생성 (Turn 1 로직 통합)

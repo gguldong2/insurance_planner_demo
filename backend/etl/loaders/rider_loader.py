@@ -1,14 +1,17 @@
+import logging
 from .base_loader import BaseLoader
+
+logger = logging.getLogger(__name__)
 
 class RiderLoader(BaseLoader):
     def run(self, file_path, target_mode="all"):
         # [수정] target_mode가 vector면 실행하지 않음
         if target_mode == "vector":
-            print(f"📜 [Rider] Skipping (Target is vector only)")
+            logger.info("rider loader skipped", extra={"reason": "vector_only_target"})
             return
 
         data = self.load_json(file_path)
-        print(f"📜 [Rider] Loading {len(data)} items...")
+        logger.info("rider loader processing", extra={"item_count": len(data), "target": target_mode})
         
         debug_list = []
 

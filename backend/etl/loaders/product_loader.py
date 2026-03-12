@@ -1,13 +1,16 @@
+import logging
 from .base_loader import BaseLoader
+
+logger = logging.getLogger(__name__)
 
 class ProductLoader(BaseLoader):
     def run(self, file_path, target_mode="all"):
         if target_mode == "vector":
-            print(f"📦 [Product] Skipping (Target is vector only)")
+            logger.info("product loader skipped", extra={"reason": "vector_only_target"})
             return
 
         data = self.load_json(file_path)
-        print(f"📦 [Product] Loading {len(data)} items...")
+        logger.info("product loader processing", extra={"item_count": len(data), "target": target_mode})
         
         # [NEW] 디버그 리스트
         debug_list = []

@@ -1,10 +1,13 @@
+import logging
 from qdrant_client import models
 from .base_loader import BaseLoader
+
+logger = logging.getLogger(__name__)
 
 class BenefitLoader(BaseLoader):
     def run(self, file_path, target_mode="all"):
         data = self.load_json(file_path)
-        self.logger.info("loader processing", extra={"loader": "benefit", "count": len(data), "target_mode": target_mode})
+        # print(f"💎 [Benefit] Processing {len(data)} items... (Target: {target_mode})")
         
         points = []
         debug_list = []
@@ -46,12 +49,13 @@ class BenefitLoader(BaseLoader):
                     vector=vector,
                     payload=payload
                 ))
+                self._log_vector_payload_preview(collection="insurance_knowledge", data_type="benefit", data_id=b["benefit_id"], vector_text=text_chunk, payload=payload)
                 
                 debug_item = payload.copy()
                 debug_item["_vector_text"] = text_chunk
                 debug_list.append(debug_item)
-                self._log_vector_payload_preview(collection="insurance_knowledge", data_type="benefit", data_id=b["benefit_id"], vector_text=text_chunk, payload=payload)
         
         if points and target_mode in ["all", "vector"]:
             self.qdrant.upsert(collection_name="insurance_knowledge", points=points)
+            self._log_upsert_summary(collection="insurance_knowledge", data_type="benefit", item_count=len(points))
             self.save_debug_json(debug_list, "debug_benefits.json")

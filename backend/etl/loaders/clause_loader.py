@@ -1,10 +1,13 @@
+import logging
 from qdrant_client import models
 from .base_loader import BaseLoader
+
+logger = logging.getLogger(__name__)
 
 class ClauseLoader(BaseLoader):
     def run(self, file_path, target_mode="all"):
         data = self.load_json(file_path)
-        self.logger.info("loader processing", extra={"loader": "clause", "count": len(data), "target_mode": target_mode})
+        # print(f"⚖️ [Clause] Processing {len(data)} items... (Target: {target_mode})")
         
         points = []
         debug_list = []
@@ -72,12 +75,12 @@ class ClauseLoader(BaseLoader):
                     vector=vec,
                     payload=payload
                 ))
+                self._log_vector_payload_preview(collection="insurance_knowledge", data_type="clause", data_id=c["clause_id"], vector_text=text_chunk, payload=payload)
                 
                 # 디버그용 (옵션)
                 debug_item = payload.copy()
                 debug_item["_vector_text"] = text_chunk
                 debug_list.append(debug_item)
-                self._log_vector_payload_preview(collection="insurance_knowledge", data_type="clause", data_id=c["clause_id"], vector_text=text_chunk, payload=payload)
 
         # ------------------------------------------------------------------
         # 3. VectorDB 업로드 실행
@@ -88,4 +91,4 @@ class ClauseLoader(BaseLoader):
                 collection_name="insurance_knowledge",
                 points=points
             )
-            print(f"✅ [Clause] VectorDB Uploaded {len(points)} items.")
+            # print(f"✅ [Clause] VectorDB Uploaded {len(points)} items.")

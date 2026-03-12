@@ -1,14 +1,17 @@
+import logging
 from qdrant_client import models
 from .base_loader import BaseLoader
+
+logger = logging.getLogger(__name__)
 
 class TermLoader(BaseLoader):
     def run(self, file_path, target_mode="all"):
         if target_mode == "graph":
-            self.logger.info("loader skipped", extra={"loader": "term", "reason": "graph target only"})
+            # print(f"📖 [Term] Skipping (Target is graph only)")
             return
 
         data = self.load_json(file_path)
-        self.logger.info("loader processing", extra={"loader": "term", "count": len(data), "target_mode": target_mode})
+        # print(f"📖 [Term] Loading {len(data)} items...")
         
         points = []
         debug_list = []
@@ -30,12 +33,13 @@ class TermLoader(BaseLoader):
                 vector=vec,
                 payload=payload
             ))
+            self._log_vector_payload_preview(collection="glossary", data_type="term", data_id=t["term_name"], vector_text=text_chunk, payload=payload)
             
             debug_item = payload.copy()
             debug_item["_vector_text"] = text_chunk
             debug_list.append(debug_item)
-            self._log_vector_payload_preview(collection="glossary", data_type="term", data_id=t["term_name"], vector_text=text_chunk, payload=payload)
             
         if points:
             self.qdrant.upsert(collection_name="glossary", points=points)
+            self._log_upsert_summary(collection="glossary", data_type="term", item_count=len(points))
             self.save_debug_json(debug_list, "debug_terms.json")

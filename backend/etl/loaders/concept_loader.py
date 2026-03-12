@@ -1,10 +1,13 @@
+import logging
 from qdrant_client import models
 from .base_loader import BaseLoader
+
+logger = logging.getLogger(__name__)
 
 class ConceptLoader(BaseLoader):
     def run(self, file_path, target_mode="all"):
         data = self.load_json(file_path)
-        self.logger.info("loader processing", extra={"loader": "concept", "count": len(data), "target_mode": target_mode})
+        # print(f"🧠 [Concept] Processing {len(data)} items... (Target: {target_mode})")
         
         points = []
         debug_list = []
@@ -30,13 +33,14 @@ class ConceptLoader(BaseLoader):
                     vector=vec,
                     payload=cpt
                 ))
+                self._log_vector_payload_preview(collection="concepts", data_type="concept", data_id=cpt["concept_id"], vector_text=text, payload=cpt)
                 
                 # 디버그용 (벡터 텍스트 포함)
                 debug_item = cpt.copy()
                 debug_item["_vector_text"] = text
                 debug_list.append(debug_item)
-                self._log_vector_payload_preview(collection="concepts", data_type="concept", data_id=cpt["concept_id"], vector_text=text, payload=cpt)
             
         if points and target_mode in ["all", "vector"]:
             self.qdrant.upsert(collection_name="concepts", points=points)
+            self._log_upsert_summary(collection="concepts", data_type="concept", item_count=len(points))
             self.save_debug_json(debug_list, "debug_concepts.json")

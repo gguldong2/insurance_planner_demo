@@ -1,10 +1,8 @@
 import sys
 import os
 import argparse
+import logging
 import time
-from backend.logging_utils import get_logger
-
-logger = get_logger(__name__)
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
 
@@ -15,6 +13,10 @@ from backend.etl.loaders.concept_loader import ConceptLoader
 from backend.etl.loaders.benefit_loader import BenefitLoader
 from backend.etl.loaders.clause_loader import ClauseLoader
 from backend.etl.loaders.term_loader import TermLoader
+from backend.logging_utils import setup_logging
+
+setup_logging()
+logger = logging.getLogger(__name__)
 
 
 # 명령어 인자(--target, --loader)를 받아 로더를 통제하도록 수정
@@ -52,12 +54,12 @@ def main():
             # 2. 파일 존재 확인 및 실행
             if os.path.exists(file_path):
                 # target_mode 전달
-                step_started = time.perf_counter()
-                logger.info("etl loader started", extra={"loader": name, "target": args.target, "file_path": file_path})
+                started = time.perf_counter()
+                logger.info("etl loader started", extra={"loader": name, "file_path": file_path, "target": args.target})
                 loader.run(file_path, target_mode=args.target)
-                logger.info("etl loader finished", extra={"loader": name, "target": args.target, "file_path": file_path, "duration_ms": round((time.perf_counter() - step_started) * 1000, 2)})
+                logger.info("etl loader finished", extra={"loader": name, "file_path": file_path, "target": args.target, "duration_ms": int((time.perf_counter()-started)*1000)})
             else:
-                logger.warning("etl loader skipped missing file", extra={"loader": name, "file_path": file_path})
+                logger.warning("etl loader skipped: file not found", extra={"loader": name, "file_path": file_path})
 
         print("\n=== 🎉 Pipeline Finished ===")
 
