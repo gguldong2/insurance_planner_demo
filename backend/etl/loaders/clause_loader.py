@@ -65,6 +65,9 @@ class ClauseLoader(BaseLoader):
                     "tag": clause_tag,      # ★ [추가] 필터링용 태그
                     "node_id": c['clause_id'],
                     "rider_id": rider_id_for_payload,
+                    "product_id": c.get('product_id'),
+                    "company": c.get('company'),
+                    "product_name": c.get('product_name'),
                     "article_num": c['article_num'],
                     "related_concepts": c.get('related_concepts', []),
                     "text": text_chunk

@@ -39,6 +39,9 @@ class BenefitLoader(BaseLoader):
                     "type": "benefit",
                     "node_id": b['benefit_id'],
                     "rider_id": b['rider_id'],
+                    "product_id": b.get('product_id'),
+                    "company": b.get('company'),
+                    "product_name": b.get('product_name'),
                     "text": text_chunk,
                     "concept_ids": [b['related_concept']],
                     "limit_count": limit_val
