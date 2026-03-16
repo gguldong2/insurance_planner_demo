@@ -27,10 +27,15 @@ setup_logging()
 logger = logging.getLogger(__name__)
 
 llm = ChatOpenAI(
-    model=os.getenv("LLM_MODEL_NAME", "Qwen/Qwen3.5-9B"),
-    api_key="EMPTY",
-    base_url=os.getenv("LLM_API_BASE", "http://localhost:8000/v1"),
+    model="Qwen/Qwen3.5-9B",
+    base_url="http://localhost:8000/v1",
+    api_key="dummy",
     temperature=0,
+    extra_body={
+        "chat_template_kwargs": {
+            "enable_thinking": False
+        }
+    },
 )
 
 
