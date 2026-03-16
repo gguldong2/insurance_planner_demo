@@ -56,6 +56,14 @@ __pycache__/
 .venv/
 
 
+# Runtime artifacts
+qdrant_data/
+backend/data/debug/
+
+# Python
+__pycache__/
+*.pyc
+
 
 
 
