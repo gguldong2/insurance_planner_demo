@@ -1,42 +1,74 @@
 #root {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  text-align: left;
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
+.markdown-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  line-height: 1.75;
+  color: #1f2937;
 }
 
-@keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+.markdown-h1,
+.markdown-h2,
+.markdown-h3 {
+  margin: 0;
+  font-weight: 700;
+  color: #111827;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
-  }
+.markdown-h1 {
+  font-size: 1.25rem;
 }
 
-.card {
-  padding: 2em;
+.markdown-h2 {
+  font-size: 1.125rem;
 }
 
-.read-the-docs {
-  color: #888;
+.markdown-h3 {
+  font-size: 1rem;
+}
+
+.markdown-p {
+  margin: 0;
+}
+
+.markdown-ul,
+.markdown-ol {
+  margin: 0;
+  padding-left: 1.25rem;
+}
+
+.markdown-ul li,
+.markdown-ol li {
+  margin: 0.25rem 0;
+}
+
+.markdown-blockquote {
+  margin: 0;
+  border-left: 4px solid #60a5fa;
+  background: #eff6ff;
+  color: #1e3a8a;
+  border-radius: 0.75rem;
+  padding: 0.9rem 1rem;
+}
+
+.markdown-blockquote p + p {
+  margin-top: 0.4rem;
+}
+
+.markdown-pre {
+  margin: 0;
+  overflow-x: auto;
+  border-radius: 0.75rem;
+  background: #0f172a;
+  color: #e2e8f0;
+  padding: 0.9rem 1rem;
+  font-size: 0.9em;
+  line-height: 1.6;
 }
