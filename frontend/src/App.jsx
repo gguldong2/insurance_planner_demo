@@ -1,10 +1,23 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import axios from 'axios';
 import './App.css';
-import { Send, Bot, User, Terminal, Database, ShieldAlert, Cpu } from 'lucide-react';
+import {
+  Send,
+  Bot,
+  User,
+  Terminal,
+  Database,
+  ShieldAlert,
+  Cpu,
+  ListChecks,
+  Hash,
+  TimerReset,
+  Sparkles,
+  ChevronRight,
+} from 'lucide-react';
 
 function renderInline(text) {
-  const parts = text.split(/(\*\*.*?\*\*|`.*?`)/g).filter(Boolean);
+  const parts = String(text || '').split(/(\*\*.*?\*\*|`.*?`)/g).filter(Boolean);
 
   return parts.map((part, index) => {
     if (part.startsWith('**') && part.endsWith('**')) {
@@ -26,7 +39,12 @@ function renderInline(text) {
 function renderMarkdown(text) {
   if (!text) return null;
 
-  const lines = text.replace(/\r\n/g, '\n').split('\n');
+  const normalized = String(text)
+    .replace(/<think>[\s\S]*?<\/think>/gi, '')
+    .replace(/^Thinking Process:[\s\S]*?(?=\n\n|##|###|\S)/i, '')
+    .trim();
+
+  const lines = normalized.replace(/\r\n/g, '\n').split('\n');
   const elements = [];
   let i = 0;
   let key = 0;
@@ -154,163 +172,349 @@ function renderMarkdown(text) {
   return <div className="markdown-body">{elements}</div>;
 }
 
+function parseLog(log, index) {
+  if (typeof log === 'object' && log !== null) {
+    return { id: index, raw: log, type: 'json', ...log };
+  }
+
+  const text = String(log || '');
+  try {
+    const parsed = JSON.parse(text);
+    return { id: index, raw: text, type: 'json', ...parsed };
+  } catch {
+    return { id: index, type: 'text', raw: text, message: text };
+  }
+}
+
+function summarizeLogs(items) {
+  const jsonItems = items.filter((item) => item.type === 'json');
+  const latest = jsonItems[jsonItems.length - 1] || null;
+  const analyzer = jsonItems.find((item) => item.message === 'analyzer finished');
+  const planner = jsonItems.find((item) => item.message === 'planner finished');
+  const grounder = jsonItems.find((item) => item.message === 'grounder finished');
+  const generator = jsonItems.find((item) => item.message === 'generator started');
+  const failed = jsonItems.find((item) => /failed/i.test(item.message || '') || item.level === 'ERROR');
+
+  const selectedTasks = [
+    ...(Array.isArray(analyzer?.tasks) ? analyzer.tasks : []),
+    ...(Array.isArray(planner?.task_plan)
+      ? planner.task_plan.map((task) => task.task_type || task.title).filter(Boolean)
+      : []),
+  ];
+
+  return {
+    requestId: latest?.request_id || analyzer?.request_id || planner?.request_id || '-',
+    selectedTasks: [...new Set(selectedTasks)],
+    mode: generator?.mode || '-',
+    keywordCount:
+      typeof grounder?.keyword_count === 'number'
+        ? grounder.keyword_count
+        : Array.isArray(analyzer?.concept_keywords)
+          ? analyzer.concept_keywords.length
+          : 0,
+    resolvedCount:
+      typeof grounder?.resolved_count === 'number'
+        ? grounder.resolved_count
+        : Array.isArray(grounder?.resolved_concept_ids)
+          ? grounder.resolved_concept_ids.length
+          : 0,
+    taskCount:
+      typeof planner?.task_count === 'number'
+        ? planner.task_count
+        : Array.isArray(planner?.task_plan)
+          ? planner.task_plan.length
+          : 0,
+    latestStatus: failed ? 'ERROR' : latest?.level || 'INFO',
+    latestMessage: failed?.message || latest?.message || '대기 중',
+    latestDuration:
+      typeof latest?.duration_ms === 'number' ? `${latest.duration_ms} ms` : '-',
+  };
+}
+
+function metricCard(icon, label, value, tone = 'default') {
+  const toneClass = {
+    default: 'bg-white border-gray-200 text-gray-900',
+    softBlue: 'bg-blue-50 border-blue-200 text-blue-900',
+    softPurple: 'bg-violet-50 border-violet-200 text-violet-900',
+    softGreen: 'bg-emerald-50 border-emerald-200 text-emerald-900',
+    softAmber: 'bg-amber-50 border-amber-200 text-amber-900',
+    softRed: 'bg-rose-50 border-rose-200 text-rose-900',
+  }[tone];
+
+  return (
+    <div className={`trace-metric-card ${toneClass}`} key={label}>
+      <div className="trace-metric-icon">{icon}</div>
+      <div>
+        <div className="trace-metric-label">{label}</div>
+        <div className="trace-metric-value">{value}</div>
+      </div>
+    </div>
+  );
+}
+
 function App() {
-  const [input, setInput] = useState("");
+  const [input, setInput] = useState('');
   const [messages, setMessages] = useState([]);
-  const [logs, setLogs] = useState([]); 
+  const [logs, setLogs] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef(null);
   const logsEndRef = useRef(null);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
   useEffect(() => {
-    logsEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [logs]);
+
+  const parsedLogs = useMemo(() => logs.map(parseLog), [logs]);
+  const traceSummary = useMemo(() => summarizeLogs(parsedLogs), [parsedLogs]);
 
   const sendMessage = async () => {
     if (!input.trim() || isLoading) return;
 
-    const userMsg = { role: "user", text: input };
-    setMessages(prev => [...prev, userMsg]);
-    setInput("");
+    const userMsg = { role: 'user', text: input };
+    setMessages((prev) => [...prev, userMsg]);
+    setInput('');
     setIsLoading(true);
     setLogs([]);
 
     try {
-      const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8080";
+      const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8080';
       const response = await axios.post(`${API_BASE}/chat`, {
-        query: userMsg.text
+        query: userMsg.text,
       });
 
       const data = response.data;
       setLogs(data.logs || []);
 
-      const botMsg = { role: "bot", text: data.answer };
-      setMessages(prev => [...prev, botMsg]);
-
+      const botMsg = { role: 'bot', text: data.answer };
+      setMessages((prev) => [...prev, botMsg]);
     } catch (error) {
       console.error(error);
-      setMessages(prev => [...prev, { role: "bot", text: "❌ Error: 서버와 연결할 수 없습니다." }]);
-      setLogs(prev => [...prev, `[System Error] ${error.message}`]);
+      setMessages((prev) => [...prev, { role: 'bot', text: '❌ Error: 서버와 연결할 수 없습니다.' }]);
+      setLogs((prev) => [...prev, `[System Error] ${error.message}`]);
     } finally {
       setIsLoading(false);
     }
   };
 
   const renderLogItem = (log, index) => {
+    const message = log.message || log.raw || 'No message';
+    const isError = log.level === 'ERROR' || /failed|error/i.test(message);
     let icon = <Terminal size={14} />;
-    let color = "text-gray-400";
+    let color = 'text-gray-500';
+    let pill = 'bg-gray-100 text-gray-700 border-gray-200';
 
-    if (log.includes("[Router]")) { icon = <Cpu size={14} />; color = "text-yellow-400"; }
-    else if (log.includes("Graph")) { icon = <Database size={14} />; color = "text-purple-400"; }
-    else if (log.includes("SQL")) { icon = <Database size={14} />; color = "text-blue-400"; }
-    else if (log.includes("[Critic]")) { icon = <ShieldAlert size={14} />; color = "text-red-400"; }
-    else if (log.includes("Final")) { icon = <Bot size={14} />; color = "text-green-400"; }
+    if (/analyzer/i.test(message)) {
+      icon = <Cpu size={14} />;
+      color = 'text-amber-600';
+      pill = 'bg-amber-50 text-amber-700 border-amber-200';
+    } else if (/grounder|Graph|SQL/i.test(message)) {
+      icon = <Database size={14} />;
+      color = 'text-violet-600';
+      pill = 'bg-violet-50 text-violet-700 border-violet-200';
+    } else if (/planner|task_plan/i.test(message)) {
+      icon = <ListChecks size={14} />;
+      color = 'text-sky-600';
+      pill = 'bg-sky-50 text-sky-700 border-sky-200';
+    } else if (/generator|Final/i.test(message)) {
+      icon = <Sparkles size={14} />;
+      color = 'text-emerald-600';
+      pill = 'bg-emerald-50 text-emerald-700 border-emerald-200';
+    }
+
+    if (isError) {
+      icon = <ShieldAlert size={14} />;
+      color = 'text-rose-600';
+      pill = 'bg-rose-50 text-rose-700 border-rose-200';
+    }
+
+    const details = [];
+    if (Array.isArray(log.tasks) && log.tasks.length) details.push(`tasks ${log.tasks.join(', ')}`);
+    if (typeof log.task_count === 'number') details.push(`task_count ${log.task_count}`);
+    if (typeof log.keyword_count === 'number') details.push(`keywords ${log.keyword_count}`);
+    if (typeof log.resolved_count === 'number') details.push(`resolved ${log.resolved_count}`);
+    if (typeof log.duration_ms === 'number') details.push(`${log.duration_ms} ms`);
+    if (log.mode) details.push(`mode ${log.mode}`);
 
     return (
-      <div key={index} className={`flex items-start gap-2 mb-2 font-mono text-xs ${color} break-words`}>
-        <span className="mt-0.5">{icon}</span>
-        <span>{log}</span>
+      <div key={index} className="trace-log-card">
+        <div className="trace-log-card-top">
+          <div className={`trace-log-icon ${color}`}>{icon}</div>
+          <div className="min-w-0 flex-1">
+            <div className="trace-log-title-row">
+              <div className="trace-log-title">{message}</div>
+              <span className={`trace-log-pill ${pill}`}>{log.level || 'LOG'}</span>
+            </div>
+            <div className="trace-log-subtitle">
+              {log.taskName || 'task -'}
+              {log.logger ? ` · ${log.logger}` : ''}
+            </div>
+          </div>
+        </div>
+
+        {details.length > 0 && (
+          <div className="trace-log-details">
+            {details.map((item, idx) => (
+              <span key={idx} className="trace-chip">
+                {item}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {Array.isArray(log.task_plan) && log.task_plan.length > 0 && (
+          <div className="trace-task-plan">
+            {log.task_plan.map((task, idx) => (
+              <div key={idx} className="trace-task-item">
+                <ChevronRight size={14} className="text-sky-500 shrink-0 mt-0.5" />
+                <div>
+                  <div className="trace-task-item-title">{task.task_type || task.title || `task_${idx + 1}`}</div>
+                  <div className="trace-task-item-meta">
+                    {task.title || '제목 없음'}
+                    {Array.isArray(task.depends_on) && task.depends_on.length ? ` · depends ${task.depends_on.join(', ')}` : ''}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {log.exception && (
+          <details className="trace-exception">
+            <summary>exception 보기</summary>
+            <pre>{log.exception}</pre>
+          </details>
+        )}
       </div>
     );
   };
 
   return (
-    <div className="flex h-screen bg-gray-100 font-sans overflow-hidden">
-      <div className="flex-1 flex flex-col bg-white shadow-xl z-10">
-        <header className="bg-slate-800 text-white p-4 flex items-center gap-3 shadow-md">
-          <div className="p-2 bg-blue-600 rounded-full">
-            <Bot size={24} />
+    <div className="app-shell">
+      <div className="chat-shell">
+        <header className="chat-header">
+          <div className="chat-header-avatar">
+            <Bot size={22} />
           </div>
           <div>
-            <h1 className="font-bold text-lg">AgensGraph Agent</h1>
-            <p className="text-xs text-slate-400">Powered by LangGraph & vLLM</p>
+            <h1 className="chat-header-title">AgensGraph Agent</h1>
+            <p className="chat-header-subtitle">Powered by LangGraph & vLLM</p>
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-slate-50">
+        <div className="chat-body">
           {messages.length === 0 && (
-            <div className="text-center text-gray-400 mt-20">
-              <Bot size={48} className="mx-auto mb-4 opacity-50" />
-              <p>무엇이든 물어보세요. Agent가 DB를 분석하여 답변합니다.</p>
+            <div className="empty-state">
+              <Bot size={52} className="mx-auto mb-4 opacity-50" />
+              <p className="empty-state-title">무엇이든 물어보세요</p>
+              <p className="empty-state-desc">Agent가 워크플로우를 실행하고, 오른쪽 패널에 trace를 구조적으로 보여줍니다.</p>
             </div>
           )}
-          
+
           {messages.map((msg, idx) => (
             <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div className={`flex gap-3 max-w-[80%] ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 
-                  ${msg.role === 'user' ? 'bg-blue-600 text-white' : 'bg-slate-700 text-white'}`}>
+              <div className={`flex gap-3 max-w-[82%] ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
+                <div
+                  className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${msg.role === 'user' ? 'bg-blue-600 text-white' : 'bg-slate-900 text-white'}`}
+                >
                   {msg.role === 'user' ? <User size={16} /> : <Bot size={16} />}
                 </div>
-                <div className={`p-3.5 rounded-2xl text-sm leading-relaxed shadow-sm whitespace-pre-wrap break-words
-                  ${msg.role === 'user' 
-                    ? 'bg-blue-600 text-white rounded-tr-none' 
-                    : 'bg-white text-gray-800 border border-gray-200 rounded-tl-none'}`}>
+                <div
+                  className={`p-4 rounded-2xl text-sm leading-relaxed shadow-sm break-words ${msg.role === 'user' ? 'bg-blue-600 text-white rounded-tr-none' : 'bg-white text-gray-800 border border-gray-200 rounded-tl-none'}`}
+                >
                   {msg.role === 'user' ? msg.text : renderMarkdown(msg.text)}
                 </div>
               </div>
             </div>
           ))}
-          
+
           {isLoading && (
             <div className="flex justify-start">
-               <div className="flex gap-3">
-                <div className="w-8 h-8 bg-slate-700 rounded-full flex items-center justify-center text-white">
+              <div className="flex gap-3">
+                <div className="w-9 h-9 bg-slate-900 rounded-full flex items-center justify-center text-white">
                   <Bot size={16} />
                 </div>
-                <div className="bg-white border p-4 rounded-2xl rounded-tl-none shadow-sm flex items-center gap-2">
+                <div className="bg-white border border-gray-200 p-4 rounded-2xl rounded-tl-none shadow-sm flex items-center gap-2">
                   <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce" />
                   <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce delay-75" />
                   <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce delay-150" />
                 </div>
-               </div>
+              </div>
             </div>
           )}
           <div ref={messagesEndRef} />
         </div>
 
-        <div className="p-4 bg-white border-t">
-          <div className="flex gap-2 items-center bg-gray-100 p-2 rounded-full border border-gray-300 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-100 transition-all">
-            <input 
+        <div className="chat-input-wrap">
+          <div className="chat-input-box">
+            <input
               type="text"
-              className="flex-1 bg-transparent border-none outline-none px-4 text-gray-700"
+              className="chat-input"
               placeholder="질문을 입력하세요..."
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
             />
-            <button 
-              onClick={sendMessage}
-              disabled={isLoading || !input.trim()}
-              className="p-2 bg-blue-600 text-white rounded-full hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
-            >
+            <button onClick={sendMessage} disabled={isLoading || !input.trim()} className="chat-send-btn">
               <Send size={18} />
             </button>
           </div>
         </div>
       </div>
-      
-      <div className="w-[400px] bg-[#1e1e1e] flex flex-col border-l border-gray-700">
-        <header className="p-3 border-b border-gray-700 bg-[#252526] text-gray-300 text-sm font-bold flex items-center gap-2">
-          <Terminal size={16} />
-          Agent Workflow Trace
+
+      <aside className="trace-shell">
+        <header className="trace-header">
+          <div className="trace-header-title">
+            <Terminal size={16} />
+            Agent Workflow Trace
+          </div>
+          <div className="trace-header-subtitle">실행 흐름과 선택된 task를 한눈에 확인</div>
         </header>
-        <div className="flex-1 p-4 overflow-y-auto font-mono text-sm space-y-1">
-          {logs.length === 0 ? (
-            <div className="text-gray-600 text-center mt-10 text-xs">
-              대기 중...<br/>워크플로우 실행 기록이 여기에 표시됩니다.
+
+        <div className="trace-summary-grid">
+          {metricCard(<Hash size={16} />, 'Request ID', traceSummary.requestId, 'softBlue')}
+          {metricCard(<Cpu size={16} />, 'Mode', traceSummary.mode, 'softPurple')}
+          {metricCard(<ListChecks size={16} />, 'Task Count', traceSummary.taskCount, 'softGreen')}
+          {metricCard(<TimerReset size={16} />, 'Latest', traceSummary.latestDuration, traceSummary.latestStatus === 'ERROR' ? 'softRed' : 'softAmber')}
+        </div>
+
+        <div className="trace-section">
+          <div className="trace-section-title">Selected Tasks</div>
+          {traceSummary.selectedTasks.length > 0 ? (
+            <div className="trace-chip-wrap">
+              {traceSummary.selectedTasks.map((task) => (
+                <span key={task} className="trace-chip trace-chip-strong">{task}</span>
+              ))}
             </div>
           ) : (
-            logs.map((log, idx) => renderLogItem(log, idx))
+            <div className="trace-empty-box">아직 추출된 task가 없습니다.</div>
+          )}
+        </div>
+
+        <div className="trace-section">
+          <div className="trace-section-title">Quick Stats</div>
+          <div className="trace-chip-wrap">
+            <span className="trace-chip">keywords {traceSummary.keywordCount}</span>
+            <span className="trace-chip">resolved {traceSummary.resolvedCount}</span>
+            <span className="trace-chip">status {traceSummary.latestStatus}</span>
+            <span className="trace-chip">message {traceSummary.latestMessage}</span>
+          </div>
+        </div>
+
+        <div className="trace-log-list">
+          {parsedLogs.length === 0 ? (
+            <div className="trace-empty-state">
+              대기 중...<br />워크플로우 실행 기록이 여기에 표시됩니다.
+            </div>
+          ) : (
+            parsedLogs.map((log, idx) => renderLogItem(log, idx))
           )}
           <div ref={logsEndRef} />
         </div>
-      </div>
-
+      </aside>
     </div>
   );
 }
