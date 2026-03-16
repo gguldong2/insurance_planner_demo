@@ -3,6 +3,7 @@ from .base_loader import BaseLoader
 
 logger = logging.getLogger(__name__)
 
+
 class ProductLoader(BaseLoader):
     def run(self, file_path, target_mode="all"):
         if target_mode == "vector":
@@ -11,21 +12,23 @@ class ProductLoader(BaseLoader):
 
         data = self.load_json(file_path)
         logger.info("product loader processing", extra={"item_count": len(data), "target": target_mode})
-        
-        # [NEW] 디버그 리스트
+
         debug_list = []
-        
+
         for p in data:
-            cypher = f"""
-            MERGE (p:Product {{product_id: '{p['product_id']}'}})
-            SET p.name = '{p['name']}',
-                p.company = '{p['company']}',
-                p.is_active = {str(p.get('is_active', True)).lower()}
+            cypher = """
+            MERGE (p:Product {product_id: %(product_id)s})
+            SET p.name = %(name)s,
+                p.company = %(company)s,
+                p.is_active = %(is_active)s
             """
-            self.ctx.graph.execute_cypher(cypher)
-            
-            # [NEW] 디버그 데이터 추가
+            params = {
+                "product_id": p["product_id"],
+                "name": p["name"],
+                "company": p["company"],
+                "is_active": bool(p.get("is_active", True)),
+            }
+            self.ctx.graph.execute_cypher(cypher, params)
             debug_list.append(p)
 
-        # [NEW] 디버그 파일 저장
         self.save_debug_json(debug_list, "debug_products.json")
