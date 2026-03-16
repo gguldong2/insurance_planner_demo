@@ -57,12 +57,27 @@ class RuntimeDB:
 
         print(f"✅ [Runtime] DB Connected. graph_path={self.graph_path}")
 
-    async def execute_cypher(self, query: str):
+    @staticmethod
+    def _escape_agtype_value(value):
+        if isinstance(value, str):
+            return json.dumps(value, ensure_ascii=False)[1:-1]
+        if isinstance(value, list):
+            return [RuntimeDB._escape_agtype_value(v) for v in value]
+        if isinstance(value, tuple):
+            return tuple(RuntimeDB._escape_agtype_value(v) for v in value)
+        if isinstance(value, dict):
+            return {k: RuntimeDB._escape_agtype_value(v) for k, v in value.items()}
+        return value
+
+    async def execute_cypher(self, query: str, params=None):
         def _run():
             with self.pg_conn.cursor() as cur:
                 try:
                     cur.execute(f"SET graph_path = {self.graph_path};")
-                    cur.execute(query)
+                    if params is None:
+                        cur.execute(query)
+                    else:
+                        cur.execute(query, self._escape_agtype_value(params))
                     if cur.description is None:
                         return []
                     rows = cur.fetchall()

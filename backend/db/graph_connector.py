@@ -48,6 +48,18 @@ class GraphLoader:
 
         print(f"✅ GraphLoader Connected (AgensGraph): graph_path={self.graph_path}")
 
+    @staticmethod
+    def _escape_agtype_value(value):
+        if isinstance(value, str):
+            return json.dumps(value, ensure_ascii=False)[1:-1]
+        if isinstance(value, list):
+            return [GraphLoader._escape_agtype_value(v) for v in value]
+        if isinstance(value, tuple):
+            return tuple(GraphLoader._escape_agtype_value(v) for v in value)
+        if isinstance(value, dict):
+            return {k: GraphLoader._escape_agtype_value(v) for k, v in value.items()}
+        return value
+
     def execute_cypher(self, query: str, params=None):
         with self.conn.cursor() as cur:
             try:
@@ -55,7 +67,7 @@ class GraphLoader:
                 if params is None:
                     cur.execute(query)
                 else:
-                    cur.execute(query, params)
+                    cur.execute(query, self._escape_agtype_value(params))
                 if cur.description is None:
                     return []
                 rows = cur.fetchall()
