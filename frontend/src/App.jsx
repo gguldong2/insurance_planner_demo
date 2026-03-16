@@ -41,13 +41,26 @@ function renderMarkdown(text) {
 
   const normalized = String(text)
     .replace(/<think>[\s\S]*?<\/think>/gi, '')
-    .replace(/^Thinking Process:[\s\S]*?(?=\n\n|##|###|\S)/i, '')
+    .replace(/^Thinking Process:[\s\S]*?(?=
+
+|##|###|####|\S)/i, '')
     .trim();
 
-  const lines = normalized.replace(/\r\n/g, '\n').split('\n');
+  const lines = normalized.replace(/
+/g, '
+').split('
+');
   const elements = [];
   let i = 0;
   let key = 0;
+
+  const isTableLine = (value) => /\|/.test(value);
+  const isTableDivider = (value) => /^\|?(\s*:?-{3,}:?\s*\|)+\s*:?-{3,}:?\s*\|?$/.test(value.trim());
+
+  const renderTableCell = (value, cellKey, tag = 'td') => {
+    const Tag = tag;
+    return <Tag key={cellKey}>{renderInline(value.trim())}</Tag>;
+  };
 
   while (i < lines.length) {
     const line = lines[i];
@@ -68,9 +81,16 @@ function renderMarkdown(text) {
       i += 1;
       elements.push(
         <pre key={key++} className="markdown-pre">
-          <code>{codeLines.join('\n')}</code>
+          <code>{codeLines.join('
+')}</code>
         </pre>
       );
+      continue;
+    }
+
+    if (trimmed.startsWith('#### ')) {
+      elements.push(<h4 key={key++} className="markdown-h4">{renderInline(trimmed.slice(5))}</h4>);
+      i += 1;
       continue;
     }
 
@@ -114,6 +134,37 @@ function renderMarkdown(text) {
       continue;
     }
 
+    if (isTableLine(trimmed) && i + 1 < lines.length && isTableDivider(lines[i + 1])) {
+      const headerCells = trimmed.replace(/^\||\|$/g, '').split('|').map((cell) => cell.trim());
+      i += 2;
+
+      const rows = [];
+      while (i < lines.length && lines[i].trim() && isTableLine(lines[i].trim())) {
+        rows.push(lines[i].trim().replace(/^\||\|$/g, '').split('|').map((cell) => cell.trim()));
+        i += 1;
+      }
+
+      elements.push(
+        <div key={key++} className="markdown-table-wrap">
+          <table className="markdown-table">
+            <thead>
+              <tr>
+                {headerCells.map((cell, idx) => renderTableCell(cell, `h-${idx}`, 'th'))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row, rowIdx) => (
+                <tr key={`r-${rowIdx}`}>
+                  {headerCells.map((_, cellIdx) => renderTableCell(row[cellIdx] || '', `c-${rowIdx}-${cellIdx}`))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      );
+      continue;
+    }
+
     if (/^[-*]\s+/.test(trimmed)) {
       const items = [];
       while (i < lines.length && /^[-*]\s+/.test(lines[i].trim())) {
@@ -151,12 +202,13 @@ function renderMarkdown(text) {
     while (
       i < lines.length &&
       lines[i].trim() &&
-      !/^#{1,3}\s/.test(lines[i].trim()) &&
+      !/^#{1,4}\s/.test(lines[i].trim()) &&
       !/^[-*]\s+/.test(lines[i].trim()) &&
       !/^\d+\.\s+/.test(lines[i].trim()) &&
       !/^>/.test(lines[i].trim()) &&
       !/^```/.test(lines[i].trim()) &&
-      !/^---/.test(lines[i].trim())
+      !/^---/.test(lines[i].trim()) &&
+      !(isTableLine(lines[i].trim()) && i + 1 < lines.length && isTableDivider(lines[i + 1]))
     ) {
       paragraphLines.push(lines[i].trim());
       i += 1;
