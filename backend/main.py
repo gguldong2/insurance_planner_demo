@@ -45,6 +45,20 @@ class ChatResponse(BaseModel):
     request_id: str
     task_statuses: List[Dict[str, Any]] = []
 
+    intent: Optional[str] = None
+    task_candidates: List[str] = []
+    required_tasks: List[str] = []
+    concept_keywords: List[str] = []
+    product_keywords: List[str] = []
+    user_filters: Dict[str, Any] = {}
+    resolved_concepts: List[Dict[str, Any]] = []
+    task_plan: List[Dict[str, Any]] = []
+    task_results: List[Dict[str, Any]] = []
+    response_sections: List[Dict[str, Any]] = []
+    guarded_sections: List[Dict[str, Any]] = []
+    plan_candidates: List[Dict[str, Any]] = []
+    allowed_entities: Dict[str, Any] = {}
+
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat_endpoint(req: ChatRequest):
@@ -56,15 +70,21 @@ async def chat_endpoint(req: ChatRequest):
         initial_state: Dict[str, Any] = {
             "question": req.query,
             "request_id": request_id,
+            "intent": "",
             "tasks": [],
+            "task_candidates": [],
+            "required_tasks": [],
             "concept_keywords": [],
             "product_keywords": [],
             "analysis_notes": [],
+            "user_filters": {},
             "resolved_concepts": [],
             "task_plan": [],
             "task_results": [],
             "response_sections": [],
             "guarded_sections": [],
+            "plan_candidates": [],
+            "allowed_entities": {},
             "final_answer": "",
             "trace_log": [],
             "node_models": {},
@@ -73,7 +93,7 @@ async def chat_endpoint(req: ChatRequest):
 
         config = {
             "run_name": "planner_chat",
-            "tags": ["env:dev", "architecture:planner", "version:3.0"],
+            "tags": ["env:dev", "architecture:planner", "version:4.0"],
             "metadata": {"user_id": "demo_user"},
         }
 
@@ -90,7 +110,17 @@ async def chat_endpoint(req: ChatRequest):
             for x in task_results
         ]
         total_ms = int((time.perf_counter() - started) * 1000)
-        logger.info("chat request finished", extra={"request_id": request_id, "tasks": tasks, "total_ms": total_ms, "task_count": len(tasks)})
+        logger.info(
+            "chat request finished",
+            extra={
+                "request_id": request_id,
+                "intent": result.get("intent"),
+                "tasks": tasks,
+                "total_ms": total_ms,
+                "task_count": len(tasks),
+                "plan_candidate_count": len(result.get("plan_candidates", []) or []),
+            },
+        )
         return ChatResponse(
             answer=result.get("final_answer", "답변을 생성하지 못했습니다."),
             logs=result.get("trace_log", []) or [],
@@ -98,6 +128,19 @@ async def chat_endpoint(req: ChatRequest):
             primary_task=tasks[0] if tasks else None,
             request_id=request_id,
             task_statuses=task_statuses,
+            intent=result.get("intent"),
+            task_candidates=result.get("task_candidates", []) or [],
+            required_tasks=result.get("required_tasks", []) or [],
+            concept_keywords=result.get("concept_keywords", []) or [],
+            product_keywords=result.get("product_keywords", []) or [],
+            user_filters=result.get("user_filters", {}) or {},
+            resolved_concepts=result.get("resolved_concepts", []) or [],
+            task_plan=result.get("task_plan", []) or [],
+            task_results=task_results,
+            response_sections=result.get("response_sections", []) or [],
+            guarded_sections=result.get("guarded_sections", []) or [],
+            plan_candidates=result.get("plan_candidates", []) or [],
+            allowed_entities=result.get("allowed_entities", {}) or {},
         )
     except Exception as exc:
         logger.exception("chat request failed", extra={"request_id": request_id})

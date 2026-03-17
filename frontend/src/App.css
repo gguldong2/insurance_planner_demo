@@ -250,9 +250,9 @@ body {
 }
 
 .trace-chip-strong {
-  background: #eff6ff;
-  color: #1d4ed8;
-  border-color: #bfdbfe;
+  background: #e5e7eb;
+  color: #111827;
+  border-color: #d1d5db;
 }
 
 .trace-empty-box {
@@ -441,9 +441,9 @@ body {
 
 .markdown-blockquote {
   margin: 0;
-  border-left: 4px solid #60a5fa;
-  background: #eff6ff;
-  color: #1e3a8a;
+  border-left: 4px solid #9ca3af;
+  background: #f3f4f6;
+  color: #374151;
   border-radius: 0.75rem;
   padding: 0.9rem 1rem;
 }
@@ -531,4 +531,76 @@ body {
     width: 100%;
     border-top: 1px solid #e5e7eb;
   }
+}
+
+.trace-json-preview {
+  margin-top: 0.65rem;
+  max-height: 280px;
+  overflow: auto;
+  white-space: pre-wrap;
+  background: #f8fafc;
+  color: #1f2937;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.85rem;
+  padding: 0.8rem 0.9rem;
+  font-size: 0.72rem;
+  line-height: 1.55;
+}
+
+.trace-details-block {
+  margin-top: 0.7rem;
+}
+
+.trace-details-block summary {
+  cursor: pointer;
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: #374151;
+}
+
+.trace-candidate-card {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 1rem;
+  padding: 0.85rem 0.9rem;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.trace-candidate-top {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 0.65rem;
+}
+
+.trace-candidate-title {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #111827;
+  line-height: 1.4;
+}
+
+.trace-candidate-subtitle {
+  margin-top: 0.18rem;
+  font-size: 0.72rem;
+  color: #6b7280;
+}
+
+.trace-score-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 3.3rem;
+  border-radius: 9999px;
+  border: 1px solid #d1d5db;
+  background: #111827;
+  color: #ffffff;
+  padding: 0.2rem 0.55rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.mt-2 {
+  margin-top: 0.5rem;
 }

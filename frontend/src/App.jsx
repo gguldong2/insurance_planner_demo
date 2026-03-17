@@ -32,10 +32,7 @@ function renderInline(text) {
 
     if (part.startsWith('`') && part.endsWith('`')) {
       return (
-        <code
-          key={index}
-          className="rounded bg-slate-100 px-1.5 py-0.5 text-[0.9em] text-slate-800"
-        >
+        <code key={index} className="rounded bg-slate-100 px-1.5 py-0.5 text-[0.9em] text-slate-800">
           {part.slice(1, -1)}
         </code>
       );
@@ -94,41 +91,22 @@ function renderMarkdown(text) {
     }
 
     if (trimmed.startsWith('#### ')) {
-      elements.push(
-        <h4 key={key++} className="markdown-h4">
-          {renderInline(trimmed.slice(5))}
-        </h4>
-      );
+      elements.push(<h4 key={key++} className="markdown-h4">{renderInline(trimmed.slice(5))}</h4>);
       i += 1;
       continue;
     }
-
     if (trimmed.startsWith('### ')) {
-      elements.push(
-        <h3 key={key++} className="markdown-h3">
-          {renderInline(trimmed.slice(4))}
-        </h3>
-      );
+      elements.push(<h3 key={key++} className="markdown-h3">{renderInline(trimmed.slice(4))}</h3>);
       i += 1;
       continue;
     }
-
     if (trimmed.startsWith('## ')) {
-      elements.push(
-        <h2 key={key++} className="markdown-h2">
-          {renderInline(trimmed.slice(3))}
-        </h2>
-      );
+      elements.push(<h2 key={key++} className="markdown-h2">{renderInline(trimmed.slice(3))}</h2>);
       i += 1;
       continue;
     }
-
     if (trimmed.startsWith('# ')) {
-      elements.push(
-        <h1 key={key++} className="markdown-h1">
-          {renderInline(trimmed.slice(2))}
-        </h1>
-      );
+      elements.push(<h1 key={key++} className="markdown-h1">{renderInline(trimmed.slice(2))}</h1>);
       i += 1;
       continue;
     }
@@ -145,7 +123,6 @@ function renderMarkdown(text) {
         quoteLines.push(lines[i].trim().replace(/^>\s?/, ''));
         i += 1;
       }
-
       elements.push(
         <blockquote key={key++} className="markdown-blockquote">
           {quoteLines.map((quoteLine, idx) => (
@@ -163,7 +140,6 @@ function renderMarkdown(text) {
         .map((cell) => cell.trim());
 
       i += 2;
-
       const rows = [];
       while (i < lines.length && lines[i].trim() && isTableLine(lines[i].trim())) {
         rows.push(
@@ -181,17 +157,13 @@ function renderMarkdown(text) {
           <table className="markdown-table">
             <thead>
               <tr>
-                {headerCells.map((cell, idx) =>
-                  renderTableCell(cell, `h-${idx}`, 'th')
-                )}
+                {headerCells.map((cell, idx) => renderTableCell(cell, `h-${idx}`, 'th'))}
               </tr>
             </thead>
             <tbody>
               {rows.map((row, rowIdx) => (
                 <tr key={`r-${rowIdx}`}>
-                  {headerCells.map((_, cellIdx) =>
-                    renderTableCell(row[cellIdx] || '', `c-${rowIdx}-${cellIdx}`)
-                  )}
+                  {headerCells.map((_, cellIdx) => renderTableCell(row[cellIdx] || '', `c-${rowIdx}-${cellIdx}`))}
                 </tr>
               ))}
             </tbody>
@@ -207,7 +179,6 @@ function renderMarkdown(text) {
         items.push(lines[i].trim().replace(/^[-*]\s+/, ''));
         i += 1;
       }
-
       elements.push(
         <ul key={key++} className="markdown-ul">
           {items.map((item, idx) => (
@@ -224,7 +195,6 @@ function renderMarkdown(text) {
         items.push(lines[i].trim().replace(/^\d+\.\s+/, ''));
         i += 1;
       }
-
       elements.push(
         <ol key={key++} className="markdown-ol">
           {items.map((item, idx) => (
@@ -237,7 +207,6 @@ function renderMarkdown(text) {
 
     const paragraphLines = [trimmed];
     i += 1;
-
     while (
       i < lines.length &&
       lines[i].trim() &&
@@ -278,115 +247,136 @@ function parseLog(log, index) {
 }
 
 function summarizeLogs(items) {
-  const jsonItems = items.filter((item) => item.type === 'json');
-  const latest = jsonItems[jsonItems.length - 1] || null;
-  const analyzer = jsonItems.find((item) => item.message === 'analyzer finished');
-  const planner = jsonItems.find((item) => item.message === 'planner finished');
-  const grounder = jsonItems.find((item) => item.message === 'grounder finished');
-  const generator = jsonItems.find((item) => item.message === 'generator started');
-  const failed = jsonItems.find((item) => /failed/i.test(item.message || '') || item.level === 'ERROR');
-
-  const selectedTasks = [
-    ...(Array.isArray(analyzer?.tasks) ? analyzer.tasks : []),
-    ...(Array.isArray(planner?.task_plan)
-      ? planner.task_plan.map((task) => task.task_type || task.title).filter(Boolean)
-      : []),
-  ];
-
+  const latestText = items[items.length - 1];
   return {
-    requestId: latest?.request_id || analyzer?.request_id || planner?.request_id || '-',
-    selectedTasks: [...new Set(selectedTasks)],
-    mode: generator?.mode || '-',
-    keywordCount:
-      typeof grounder?.keyword_count === 'number'
-        ? grounder.keyword_count
-        : Array.isArray(analyzer?.concept_keywords)
-          ? analyzer.concept_keywords.length
-          : 0,
-    resolvedCount:
-      typeof grounder?.resolved_count === 'number'
-        ? grounder.resolved_count
-        : Array.isArray(grounder?.resolved_concept_ids)
-          ? grounder.resolved_concept_ids.length
-          : 0,
-    taskCount:
-      typeof planner?.task_count === 'number'
-        ? planner.task_count
-        : Array.isArray(planner?.task_plan)
-          ? planner.task_plan.length
-          : 0,
-    latestStatus: failed ? 'ERROR' : latest?.level || 'INFO',
-    latestMessage: failed?.message || latest?.message || '대기 중',
-    latestDuration:
-      typeof latest?.duration_ms === 'number' ? `${latest.duration_ms} ms` : '-',
+    latestStatus: 'INFO',
+    latestMessage: latestText?.message || latestText?.raw || '대기 중',
   };
 }
 
-function metricCard(icon, label, value, tone = 'default') {
-  const toneClass = {
-    default: 'bg-white border-gray-200 text-gray-900',
-    softBlue: 'bg-gray-50 border-gray-200 text-gray-900',
-    softPurple: 'bg-violet-50 border-violet-200 text-violet-900',
-    softGreen: 'bg-emerald-50 border-emerald-200 text-emerald-900',
-    softAmber: 'bg-amber-50 border-amber-200 text-amber-900',
-    softRed: 'bg-rose-50 border-rose-200 text-rose-900',
-  }[tone];
-
+function metricCard(icon, label, value) {
   return (
-    <div className={`trace-metric-card ${toneClass}`} key={label}>
+    <div className="trace-metric-card">
       <div className="trace-metric-icon">{icon}</div>
       <div>
         <div className="trace-metric-label">{label}</div>
-        <div className="trace-metric-value">{value}</div>
+        <div className="trace-metric-value">{value ?? '-'}</div>
       </div>
     </div>
   );
 }
 
+function chipList(items, strong = false) {
+  if (!items || items.length === 0) return <div className="trace-empty-box">데이터 없음</div>;
+  return (
+    <div className="trace-chip-wrap">
+      {items.map((item) => (
+        <span key={String(item)} className={`trace-chip ${strong ? 'trace-chip-strong' : ''}`}>
+          {String(item)}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function JsonPreview({ data }) {
+  if (data == null) return <div className="trace-empty-box">데이터 없음</div>;
+  return <pre className="trace-json-preview">{JSON.stringify(data, null, 2)}</pre>;
+}
+
+function PlanCandidateCard({ candidate, index }) {
+  const breakdown = candidate?.score_breakdown || {};
+  return (
+    <div className="trace-candidate-card">
+      <div className="trace-candidate-top">
+        <div>
+          <div className="trace-candidate-title">
+            {index + 1}. {candidate?.company || '-'} / {candidate?.product_name || '-'} / {candidate?.rider_name || '-'}
+          </div>
+          <div className="trace-candidate-subtitle">
+            eligible: {String(candidate?.is_eligible)}
+            {candidate?.ineligible_reason ? ` · ${candidate.ineligible_reason}` : ''}
+          </div>
+        </div>
+        <div className="trace-score-badge">{breakdown.final_score ?? '-'}</div>
+      </div>
+      <div className="trace-chip-wrap">
+        <span className="trace-chip">benefit {breakdown.benefit_match_score ?? '-'}</span>
+        <span className="trace-chip">condition {breakdown.condition_clarity_score ?? '-'}</span>
+        <span className="trace-chip">exclusion {breakdown.exclusion_penalty ?? '-'}</span>
+        <span className="trace-chip">coverage {breakdown.coverage_breadth_score ?? '-'}</span>
+        <span className="trace-chip">user-fit {breakdown.user_filter_match_score ?? '-'}</span>
+      </div>
+    </div>
+  );
+}
+
+function TaskResultCard({ item }) {
+  const evidence = item?.evidence || [];
+  return (
+    <div className="trace-log-card">
+      <div className="trace-log-title-row">
+        <div>
+          <div className="trace-log-title">{item?.title || item?.task_type}</div>
+          <div className="trace-log-subtitle">
+            status {item?.status || '-'} · evidence {item?.evidence_count ?? evidence.length} · {item?.duration_ms ?? '-'}ms
+          </div>
+        </div>
+        <span className="trace-log-pill">{item?.task_type}</span>
+      </div>
+      <div className="trace-task-item-meta">{item?.summary || '-'}</div>
+      {evidence.length > 0 && (
+        <details className="trace-details-block">
+          <summary>evidence 보기</summary>
+          <JsonPreview data={evidence} />
+        </details>
+      )}
+    </div>
+  );
+}
+
+const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8080';
+
 function App() {
-  const [input, setInput] = useState('');
   const [messages, setMessages] = useState([]);
-  const [logs, setLogs] = useState([]);
+  const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [logs, setLogs] = useState([]);
+  const [debugData, setDebugData] = useState(null);
+
   const messagesEndRef = useRef(null);
   const logsEndRef = useRef(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [messages, isLoading]);
 
   useEffect(() => {
     logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [logs]);
 
-  const parsedLogs = useMemo(() => logs.map(parseLog), [logs]);
+  const parsedLogs = useMemo(() => logs.map((log, index) => parseLog(log, index)), [logs]);
   const traceSummary = useMemo(() => summarizeLogs(parsedLogs), [parsedLogs]);
 
   const sendMessage = async () => {
     if (!input.trim() || isLoading) return;
-
-    const userMsg = { role: 'user', text: input };
-    setMessages((prev) => [...prev, userMsg]);
+    const userMessage = { role: 'user', text: input };
+    setMessages((prev) => [...prev, userMessage]);
     setInput('');
     setIsLoading(true);
     setLogs([]);
+    setDebugData(null);
 
     try {
-      const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8080';
-      const response = await axios.post(`${API_BASE}/chat`, {
-        query: userMsg.text,
-      });
-
+      const response = await axios.post(`${API_BASE}/chat`, { query: userMessage.text });
       const data = response.data;
+      setMessages((prev) => [...prev, { role: 'assistant', text: data.answer || '응답이 없습니다.' }]);
       setLogs(data.logs || []);
-
-      const botMsg = { role: 'bot', text: data.answer };
-      setMessages((prev) => [...prev, botMsg]);
+      setDebugData(data);
     } catch (error) {
-      console.error(error);
       setMessages((prev) => [
         ...prev,
-        { role: 'bot', text: '❌ Error: 서버와 연결할 수 없습니다.' },
+        { role: 'assistant', text: '요청 처리 중 오류가 발생했습니다. 백엔드 로그를 확인해 주세요.' },
       ]);
       setLogs((prev) => [...prev, `[System Error] ${error.message}`]);
     } finally {
@@ -395,97 +385,23 @@ function App() {
   };
 
   const renderLogItem = (log, index) => {
-    const message = log.message || log.raw || 'No message';
-    const isError = log.level === 'ERROR' || /failed|error/i.test(message);
-    let icon = <Terminal size={14} />;
-    let color = 'text-gray-500';
-    let pill = 'bg-gray-100 text-gray-700 border-gray-200';
-
-    if (/analyzer/i.test(message)) {
-      icon = <Cpu size={14} />;
-      color = 'text-amber-600';
-      pill = 'bg-amber-50 text-amber-700 border-amber-200';
-    } else if (/grounder|Graph|SQL/i.test(message)) {
-      icon = <Database size={14} />;
-      color = 'text-violet-600';
-      pill = 'bg-violet-50 text-violet-700 border-violet-200';
-    } else if (/planner|task_plan/i.test(message)) {
-      icon = <ListChecks size={14} />;
-      color = 'text-gray-600';
-      pill = 'bg-gray-100 text-gray-700 border-gray-200';
-    } else if (/generator|Final/i.test(message)) {
-      icon = <Sparkles size={14} />;
-      color = 'text-emerald-600';
-      pill = 'bg-emerald-50 text-emerald-700 border-emerald-200';
+    if (log.type !== 'json') {
+      return (
+        <div key={index} className="trace-log-card">
+          <div className="trace-log-title">{log.message}</div>
+        </div>
+      );
     }
-
-    if (isError) {
-      icon = <ShieldAlert size={14} />;
-      color = 'text-rose-600';
-      pill = 'bg-rose-50 text-rose-700 border-rose-200';
-    }
-
-    const details = [];
-    if (Array.isArray(log.tasks) && log.tasks.length) details.push(`tasks ${log.tasks.join(', ')}`);
-    if (typeof log.task_count === 'number') details.push(`task_count ${log.task_count}`);
-    if (typeof log.keyword_count === 'number') details.push(`keywords ${log.keyword_count}`);
-    if (typeof log.resolved_count === 'number') details.push(`resolved ${log.resolved_count}`);
-    if (typeof log.duration_ms === 'number') details.push(`${log.duration_ms} ms`);
-    if (log.mode) details.push(`mode ${log.mode}`);
-
     return (
       <div key={index} className="trace-log-card">
-        <div className="trace-log-card-top">
-          <div className={`trace-log-icon ${color}`}>{icon}</div>
-          <div className="min-w-0 flex-1">
-            <div className="trace-log-title-row">
-              <div className="trace-log-title">{message}</div>
-              <span className={`trace-log-pill ${pill}`}>{log.level || 'LOG'}</span>
-            </div>
-            <div className="trace-log-subtitle">
-              {log.taskName || 'task -'}
-              {log.logger ? ` · ${log.logger}` : ''}
-            </div>
+        <div className="trace-log-title-row">
+          <div>
+            <div className="trace-log-title">{log.message || `trace-${index}`}</div>
+            <div className="trace-log-subtitle">structured log</div>
           </div>
+          <span className="trace-log-pill">json</span>
         </div>
-
-        {details.length > 0 && (
-          <div className="trace-log-details">
-            {details.map((item, idx) => (
-              <span key={idx} className="trace-chip">
-                {item}
-              </span>
-            ))}
-          </div>
-        )}
-
-        {Array.isArray(log.task_plan) && log.task_plan.length > 0 && (
-          <div className="trace-task-plan">
-            {log.task_plan.map((task, idx) => (
-              <div key={idx} className="trace-task-item">
-                <ChevronRight size={14} className="text-gray-400 shrink-0 mt-0.5" />
-                <div>
-                  <div className="trace-task-item-title">
-                    {task.task_type || task.title || `task_${idx + 1}`}
-                  </div>
-                  <div className="trace-task-item-meta">
-                    {task.title || '제목 없음'}
-                    {Array.isArray(task.depends_on) && task.depends_on.length
-                      ? ` · depends ${task.depends_on.join(', ')}`
-                      : ''}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {log.exception && (
-          <details className="trace-exception">
-            <summary>exception 보기</summary>
-            <pre>{log.exception}</pre>
-          </details>
-        )}
+        <JsonPreview data={log} />
       </div>
     );
   };
@@ -499,7 +415,7 @@ function App() {
           </div>
           <div>
             <h1 className="chat-header-title">AgensGraph Agent</h1>
-            <p className="chat-header-subtitle">Powered by LangGraph & vLLM</p>
+            <p className="chat-header-subtitle">Grounded insurance QA</p>
           </div>
         </header>
 
@@ -509,7 +425,7 @@ function App() {
               <Bot size={52} className="mx-auto mb-4 opacity-50" />
               <p className="empty-state-title">무엇이든 물어보세요</p>
               <p className="empty-state-desc">
-                Agent가 워크플로우를 실행하고, 오른쪽 패널에 trace를 구조적으로 보여줍니다.
+                추천·비교는 검색 근거 안의 회사/상품/특약만 사용하고, 오른쪽 패널에 분석·검색·점수화 결과를 함께 표시합니다.
               </p>
             </div>
           )}
@@ -517,20 +433,10 @@ function App() {
           {messages.map((msg, idx) => (
             <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
               <div className={`flex gap-3 max-w-[82%] ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
-                <div
-                  className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${
-                    msg.role === 'user' ? 'bg-gray-100 text-gray-800 border border-gray-200' : 'bg-slate-900 text-white'
-                  }`}
-                >
+                <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${msg.role === 'user' ? 'bg-gray-100 text-gray-800 border border-gray-200' : 'bg-slate-900 text-white'}`}>
                   {msg.role === 'user' ? <User size={16} /> : <Bot size={16} />}
                 </div>
-                <div
-                  className={`p-4 rounded-2xl text-sm leading-relaxed shadow-sm break-words ${
-                    msg.role === 'user'
-                      ? 'bg-gray-100 text-gray-800 border border-gray-200 rounded-tr-none'
-                      : 'bg-white text-gray-800 border border-gray-200 rounded-tl-none'
-                  }`}
-                >
+                <div className={`p-4 rounded-2xl text-sm leading-relaxed shadow-sm break-words ${msg.role === 'user' ? 'bg-gray-100 text-gray-800 border border-gray-200 rounded-tr-none' : 'bg-white text-gray-800 border border-gray-200 rounded-tl-none'}`}>
                   {msg.role === 'user' ? msg.text : renderMarkdown(msg.text)}
                 </div>
               </div>
@@ -564,11 +470,7 @@ function App() {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
             />
-            <button
-              onClick={sendMessage}
-              disabled={isLoading || !input.trim()}
-              className="chat-send-btn"
-            >
+            <button onClick={sendMessage} disabled={isLoading || !input.trim()} className="chat-send-btn">
               <Send size={18} />
             </button>
           </div>
@@ -581,57 +483,109 @@ function App() {
             <Terminal size={16} />
             Agent Workflow Trace
           </div>
-          <div className="trace-header-subtitle">실행 흐름과 선택된 task를 한눈에 확인</div>
+          <div className="trace-header-subtitle">의도 분석 · 검색 결과 · 점수화 · 근거 사용 위치</div>
         </header>
 
         <div className="trace-summary-grid">
-          {metricCard(<Hash size={16} />, 'Request ID', traceSummary.requestId, 'softBlue')}
-          {metricCard(<Cpu size={16} />, 'Mode', traceSummary.mode, 'softPurple')}
-          {metricCard(<ListChecks size={16} />, 'Task Count', traceSummary.taskCount, 'softGreen')}
-          {metricCard(
-            <TimerReset size={16} />,
-            'Latest',
-            traceSummary.latestDuration,
-            traceSummary.latestStatus === 'ERROR' ? 'softRed' : 'softAmber'
-          )}
-        </div>
-
-        <div className="trace-section">
-          <div className="trace-section-title">Selected Tasks</div>
-          {traceSummary.selectedTasks.length > 0 ? (
-            <div className="trace-chip-wrap">
-              {traceSummary.selectedTasks.map((task) => (
-                <span key={task} className="trace-chip trace-chip-strong">
-                  {task}
-                </span>
-              ))}
-            </div>
-          ) : (
-            <div className="trace-empty-box">아직 추출된 task가 없습니다.</div>
-          )}
-        </div>
-
-        <div className="trace-section">
-          <div className="trace-section-title">Quick Stats</div>
-          <div className="trace-chip-wrap">
-            <span className="trace-chip">keywords {traceSummary.keywordCount}</span>
-            <span className="trace-chip">resolved {traceSummary.resolvedCount}</span>
-            <span className="trace-chip">status {traceSummary.latestStatus}</span>
-            <span className="trace-chip">message {traceSummary.latestMessage}</span>
-          </div>
+          {metricCard(<Hash size={16} />, 'Request ID', debugData?.request_id || '-')}
+          {metricCard(<Cpu size={16} />, 'Intent', debugData?.intent || '-')}
+          {metricCard(<ListChecks size={16} />, 'Tasks', (debugData?.tasks || []).length)}
+          {metricCard(<TimerReset size={16} />, 'Latest', traceSummary.latestMessage)}
         </div>
 
         <div className="trace-log-list">
-          {parsedLogs.length === 0 ? (
-            <div className="trace-empty-state">
-              대기 중...
-              <br />
-              워크플로우 실행 기록이 여기에 표시됩니다.
+          <div className="trace-section">
+            <div className="trace-section-title">Analyzer</div>
+            {chipList(debugData?.task_candidates || [], true)}
+            <div className="trace-chip-wrap mt-2">
+              {(debugData?.required_tasks || []).map((task) => (
+                <span key={task} className="trace-chip">required {task}</span>
+              ))}
             </div>
-          ) : (
-            parsedLogs.map((log, idx) => renderLogItem(log, idx))
-          )}
-          <div ref={logsEndRef} />
+            <div className="trace-chip-wrap mt-2">
+              {(debugData?.concept_keywords || []).map((item) => (
+                <span key={item} className="trace-chip">concept {item}</span>
+              ))}
+              {(debugData?.product_keywords || []).map((item) => (
+                <span key={item} className="trace-chip">product {item}</span>
+              ))}
+            </div>
+            <details className="trace-details-block">
+              <summary>user_filters 보기</summary>
+              <JsonPreview data={debugData?.user_filters || {}} />
+            </details>
+          </div>
+
+          <div className="trace-section">
+            <div className="trace-section-title">Grounder</div>
+            {(debugData?.resolved_concepts || []).length > 0 ? (
+              (debugData?.resolved_concepts || []).map((item, idx) => (
+                <div key={idx} className="trace-log-card">
+                  <div className="trace-log-title">{item.keyword} → {item.label_ko || item.concept_id}</div>
+                  <div className="trace-log-subtitle">score {item.score} · {item.category || '-'}</div>
+                </div>
+              ))
+            ) : (
+              <div className="trace-empty-box">resolved concept 없음</div>
+            )}
+          </div>
+
+          <div className="trace-section">
+            <div className="trace-section-title">Planner</div>
+            {(debugData?.task_plan || []).length > 0 ? (
+              (debugData?.task_plan || []).map((task) => (
+                <div key={task.task_id} className="trace-log-card">
+                  <div className="trace-log-title">{task.task_id} · {task.task_type}</div>
+                  <div className="trace-log-subtitle">depends_on {Array.isArray(task.depends_on) ? task.depends_on.join(', ') || '-' : '-'}</div>
+                  <JsonPreview data={task.inputs || {}} />
+                </div>
+              ))
+            ) : (
+              <div className="trace-empty-box">task plan 없음</div>
+            )}
+          </div>
+
+          <div className="trace-section">
+            <div className="trace-section-title">Plan Scoring</div>
+            {(debugData?.plan_candidates || []).length > 0 ? (
+              (debugData?.plan_candidates || []).map((candidate, index) => (
+                <PlanCandidateCard key={`${candidate.product_name}-${candidate.rider_name}-${index}`} candidate={candidate} index={index} />
+              ))
+            ) : (
+              <div className="trace-empty-box">점수화된 후보 없음</div>
+            )}
+          </div>
+
+          <div className="trace-section">
+            <div className="trace-section-title">Executor Results</div>
+            {(debugData?.task_results || []).length > 0 ? (
+              (debugData?.task_results || []).map((item) => <TaskResultCard key={item.task_id} item={item} />)
+            ) : (
+              <div className="trace-empty-box">task 결과 없음</div>
+            )}
+          </div>
+
+          <div className="trace-section">
+            <div className="trace-section-title">Guard & Allowed Entities</div>
+            <details className="trace-details-block" open>
+              <summary>guarded_sections 보기</summary>
+              <JsonPreview data={debugData?.guarded_sections || []} />
+            </details>
+            <details className="trace-details-block">
+              <summary>allowed_entities 보기</summary>
+              <JsonPreview data={debugData?.allowed_entities || {}} />
+            </details>
+          </div>
+
+          <div className="trace-section">
+            <div className="trace-section-title">Raw Trace Logs</div>
+            {parsedLogs.length === 0 ? (
+              <div className="trace-empty-state">대기 중...\n워크플로우 실행 기록이 여기에 표시됩니다.</div>
+            ) : (
+              parsedLogs.map((log, idx) => renderLogItem(log, idx))
+            )}
+            <div ref={logsEndRef} />
+          </div>
         </div>
       </aside>
     </div>

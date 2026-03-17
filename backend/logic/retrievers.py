@@ -1,11 +1,11 @@
 """Retrieval helpers for the insurance QA workflow.
 
-These functions are intentionally thin and deterministic. Their main job is to
-return compact evidence objects with enough metadata for grounded final answers.
-In particular, product_name and rider_name are preserved whenever possible so
-that the generator can explicitly mention which product/rider the evidence came
-from.
+These helpers keep evidence compact and metadata-rich so the graph layer can
+stay deterministic. The most important guarantee is that product/company/rider
+identity survives retrieval whenever possible.
 """
+
+from __future__ import annotations
 
 import logging
 import time
@@ -28,7 +28,6 @@ def _ms(start: float) -> int:
 device = "cuda" if torch.cuda.is_available() else "cpu"
 embed_model = BGEM3FlagModel("BAAI/bge-m3", use_fp16=True, device=device)
 db = RuntimeDB()
-
 
 
 def get_embedding(text: str):
@@ -65,7 +64,7 @@ async def link_concept(keyword: str) -> Optional[Dict[str, Any]]:
     return candidates[0] if candidates else None
 
 
-async def retrieve_benefit(concept_id: str):
+async def retrieve_benefit(concept_id: str) -> List[Dict[str, Any]]:
     """Fetch benefits tied to a concept with product/rider identity preserved."""
     started = time.perf_counter()
     logger.info("benefit retrieval started", extra={"concept_id": concept_id})
@@ -73,33 +72,36 @@ async def retrieve_benefit(concept_id: str):
     query = f"""
     MATCH (p:Product)-[:HAS_RIDER]->(r:Rider)-[:HAS_BENEFIT]->(b:Benefit)-[:RELATED_TO]->(c:Concept {{concept_id: '{concept_id}'}})
     RETURN {{
+        company: p.company,
+        product_id: p.product_id,
         product_name: p.name,
+        rider_id: r.rider_id,
         rider_name: r.name,
         benefit_name: b.name,
         amount: b.amount_text,
         condition: b.condition_summary,
-        limit: b.limit_count
+        concept_id: c.concept_id,
+        concept_label: c.label_ko
     }}
     """
     results = await db.execute_cypher(query)
-    logger.info("benefit retrieval finished", extra={"concept_id": concept_id, "result_count": len(results or []), "duration_ms": _ms(started)})
+    logger.info("benefit retrieval finished", extra={"concept_id": concept_id, "result_count": len(results), "duration_ms": _ms(started)})
     return results or []
 
 
-async def retrieve_exclusion(concept_id: str):
-    """Find exclusion clauses and verify them against Graph relationships."""
+async def retrieve_exclusion(concept_id: str) -> List[Dict[str, Any]]:
+    """Fetch exclusion/limitation clauses relevant to a concept."""
     started = time.perf_counter()
     logger.info("exclusion retrieval started", extra={"concept_id": concept_id})
+    vec = get_embedding(f"{concept_id} 면책 또는 제한")
 
-    filter_condition = models.Filter(
+    filter_cond = models.Filter(
         must=[
-            models.FieldCondition(key="tag", match=models.MatchValue(value="EXCLUSION")),
+            models.FieldCondition(key="type", match=models.MatchValue(value="clause")),
             models.FieldCondition(key="related_concepts", match=models.MatchAny(any=[concept_id])),
         ]
     )
-
-    vec = get_embedding("면책 지급제한 보장하지 않는 경우")
-    hits = await db.search_vector(collection="insurance_knowledge", vector=vec, filter=filter_condition, limit=3)
+    hits = await db.search_vector("insurance_knowledge", vec, filter=filter_cond, limit=5)
 
     valid_results = []
     for hit in hits or []:
@@ -108,12 +110,17 @@ async def retrieve_exclusion(concept_id: str):
         rider_id = payload.get("rider_id")
 
         verify_query = f"""
-        MATCH (p:Product)-[:HAS_RIDER]->(r:Rider {{rider_id: '{rider_id}'}})-[:RESTRICTS]->(c:Clause {{clause_id: '{clause_id}'}})
+        MATCH (p:Product)-[:HAS_RIDER]->(r:Rider {{rider_id: '{rider_id}'}})-[rel:RESTRICTS|HAS_CLAUSE]->(c:Clause {{clause_id: '{clause_id}'}})
         RETURN {{
+            company: p.company,
+            product_id: p.product_id,
             product_name: p.name,
+            rider_id: r.rider_id,
             rider_name: r.name,
             clause_id: c.clause_id,
-            clause_title: c.title
+            clause_title: c.title,
+            relation_type: type(rel),
+            tag: c.tag
         }}
         """
         graph_check = await db.execute_cypher(verify_query)
@@ -122,14 +129,18 @@ async def retrieve_exclusion(concept_id: str):
             meta = graph_check[0]
             valid_results.append(
                 {
+                    "company": meta.get("company"),
+                    "product_id": meta.get("product_id"),
+                    "product_name": meta.get("product_name"),
+                    "rider_id": meta.get("rider_id") or rider_id,
+                    "rider_name": meta.get("rider_name"),
                     "text": payload.get("text"),
                     "score": float(getattr(hit, "score", 0.0) or 0.0),
                     "verified": True,
-                    "product_name": meta.get("product_name"),
-                    "rider_name": meta.get("rider_name"),
-                    "rider_id": rider_id,
                     "clause_id": clause_id,
                     "clause_title": meta.get("clause_title"),
+                    "relation_type": meta.get("relation_type"),
+                    "tag": meta.get("tag"),
                 }
             )
 
@@ -137,7 +148,7 @@ async def retrieve_exclusion(concept_id: str):
     return valid_results
 
 
-async def retrieve_condition(concept_id: str):
+async def retrieve_condition(concept_id: str) -> List[Dict[str, Any]]:
     """Return condition-focused evidence, with vector fallback if needed."""
     started = time.perf_counter()
     logger.info("condition retrieval started", extra={"concept_id": concept_id})
@@ -163,7 +174,10 @@ async def retrieve_condition(concept_id: str):
 
         final_results.append(
             {
+                "company": item.get("company"),
+                "product_id": item.get("product_id"),
                 "product_name": item.get("product_name"),
+                "rider_id": item.get("rider_id"),
                 "rider_name": item.get("rider_name"),
                 "benefit": item.get("benefit_name"),
                 "condition_detail": condition_text,
@@ -174,7 +188,7 @@ async def retrieve_condition(concept_id: str):
     return final_results
 
 
-async def retrieve_term(keyword: str):
+async def retrieve_term(keyword: str) -> Optional[Dict[str, Any]]:
     """Search glossary first, then fall back to clause text search."""
     started = time.perf_counter()
     logger.info("term retrieval started", extra={"keyword": keyword})
@@ -212,6 +226,7 @@ async def retrieve_term(keyword: str):
             "source": "insurance_knowledge",
             "score": float(getattr(hits[0], "score", 0.0) or 0.0),
             "mapped_concept_id": None,
+            "company": payload.get("company"),
             "product_name": payload.get("product_name"),
             "rider_name": payload.get("rider_name"),
         }
@@ -222,7 +237,7 @@ async def retrieve_term(keyword: str):
     return None
 
 
-async def retrieve_comparison(concept_id: str, product_keywords: list):
+async def retrieve_comparison(concept_id: str, product_keywords: list) -> Dict[str, Any]:
     """Return comparison evidence for product keywords under one concept."""
     started = time.perf_counter()
     logger.info("comparison retrieval started", extra={"concept_id": concept_id, "product_keywords": product_keywords})
@@ -233,7 +248,10 @@ async def retrieve_comparison(concept_id: str, product_keywords: list):
         MATCH (p:Product)-[:HAS_RIDER]->(r:Rider)-[:HAS_BENEFIT]->(b:Benefit)-[:RELATED_TO]->(c:Concept {{concept_id: '{concept_id}'}})
         WHERE p.name CONTAINS '{prod_kwd}'
         RETURN {{
+            company: p.company,
+            product_id: p.product_id,
             product_name: p.name,
+            rider_id: r.rider_id,
             rider_name: r.name,
             renewal_type: r.renewal_type,
             benefit_name: b.name,
@@ -253,3 +271,79 @@ async def retrieve_comparison(concept_id: str, product_keywords: list):
 
     logger.info("comparison retrieval finished", extra={"concept_id": concept_id, "product_keyword_count": len(product_keywords), "result_count": len(comparison_data), "duration_ms": _ms(started)})
     return comparison_data
+
+
+async def retrieve_plan_catalog(
+    concept_id: Optional[str] = None,
+    product_keywords: Optional[List[str]] = None,
+    limit: int = 12,
+) -> List[Dict[str, Any]]:
+    """Return plan-unit candidates grouped by company/product/rider.
+
+    The returned objects are intentionally rich enough for scoring:
+    - benefits: small list of benefit summaries
+    - clauses: small list of clause summaries, including RESTRICTS edges
+    - company/product/rider identity
+    """
+    started = time.perf_counter()
+    logger.info("plan catalog retrieval started", extra={"concept_id": concept_id, "product_keywords": product_keywords, "limit": limit})
+
+    query = """
+    MATCH (p:Product)-[:HAS_RIDER]->(r:Rider)
+    OPTIONAL MATCH (r)-[:HAS_BENEFIT]->(b:Benefit)
+    OPTIONAL MATCH (b)-[:RELATED_TO]->(c:Concept)
+    WITH p, r, collect(DISTINCT {
+        benefit_name: b.name,
+        amount_text: b.amount_text,
+        condition_summary: b.condition_summary,
+        concept_id: c.concept_id,
+        concept_label: c.label_ko
+    }) AS benefits
+    OPTIONAL MATCH (r)-[rel:RESTRICTS|HAS_CLAUSE]->(cl:Clause)
+    WITH p, r, benefits, collect(DISTINCT {
+        clause_id: cl.clause_id,
+        title: cl.title,
+        content: cl.content,
+        relation_type: type(rel),
+        tag: cl.tag
+    }) AS clauses
+    RETURN {
+        company: p.company,
+        product_id: p.product_id,
+        product_name: p.name,
+        rider_id: r.rider_id,
+        rider_name: r.name,
+        renewal_type: r.renewal_type,
+        benefits: benefits,
+        clauses: clauses
+    }
+    """
+    rows = await db.execute_cypher(query)
+    rows = rows or []
+
+    cleaned: List[Dict[str, Any]] = []
+    product_keywords = [x for x in (product_keywords or []) if x]
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        benefits = [b for b in (row.get("benefits") or []) if isinstance(b, dict) and any(b.values())]
+        clauses = [c for c in (row.get("clauses") or []) if isinstance(c, dict) and any(c.values())]
+        item = {**row, "benefits": benefits, "clauses": clauses}
+
+        if concept_id:
+            concept_filtered = [b for b in benefits if b.get("concept_id") == concept_id]
+            if not concept_filtered:
+                continue
+            item["benefits"] = concept_filtered
+
+        if product_keywords:
+            text = f"{item.get('company', '')} {item.get('product_name', '')} {item.get('rider_name', '')}"
+            if not any(keyword in text for keyword in product_keywords):
+                continue
+
+        cleaned.append(item)
+
+    cleaned.sort(key=lambda x: (len(x.get("benefits") or []), len(x.get("clauses") or [])), reverse=True)
+    cleaned = cleaned[:limit]
+    logger.info("plan catalog retrieval finished", extra={"concept_id": concept_id, "result_count": len(cleaned), "duration_ms": _ms(started)})
+    return cleaned
