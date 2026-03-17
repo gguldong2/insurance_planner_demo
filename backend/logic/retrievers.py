@@ -1,9 +1,18 @@
+"""Retrieval helpers for the insurance QA workflow.
+
+These functions are intentionally thin and deterministic. Their main job is to
+return compact evidence objects with enough metadata for grounded final answers.
+In particular, product_name and rider_name are preserved whenever possible so
+that the generator can explicitly mention which product/rider the evidence came
+from.
+"""
+
 import logging
 import time
 from typing import Any, Dict, List, Optional
 
-from qdrant_client import models
 from FlagEmbedding import BGEM3FlagModel
+from qdrant_client import models
 import torch
 
 from backend.db.runtime_conn import RuntimeDB
@@ -14,33 +23,27 @@ logger = logging.getLogger(__name__)
 def _ms(start: float) -> int:
     return int((time.perf_counter() - start) * 1000)
 
-# 1. 임베딩 모델 로드 (전역/싱글톤)
+
+# Single shared embedding model instance.
 device = "cuda" if torch.cuda.is_available() else "cpu"
 embed_model = BGEM3FlagModel("BAAI/bge-m3", use_fp16=True, device=device)
 db = RuntimeDB()
 
 
+
 def get_embedding(text: str):
+    """Encode text into the dense vector used by Qdrant searches."""
     return embed_model.encode(text, return_dense=True)["dense_vecs"]
 
 
-# =========================================================
-# [Step 1] Grounding: Entity Linker
-# =========================================================
 async def link_concept_candidates(keyword: str, limit: int = 3) -> List[Dict[str, Any]]:
-    """
-    사용자 키워드 -> Concept 후보 리스트 반환
-    """
+    """Return candidate concept nodes for a user keyword."""
     if not keyword:
         return []
 
     logger.info("[Retriever:Grounding] keyword=%s", keyword)
     vec = get_embedding(keyword)
-    hits = await db.search_vector(
-        collection="concepts",
-        vector=vec,
-        limit=limit,
-    )
+    hits = await db.search_vector(collection="concepts", vector=vec, limit=limit)
 
     candidates: List[Dict[str, Any]] = []
     for hit in hits or []:
@@ -49,8 +52,7 @@ async def link_concept_candidates(keyword: str, limit: int = 3) -> List[Dict[str
             {
                 "keyword": keyword,
                 "score": float(getattr(hit, "score", 0.0) or 0.0),
-                "matched_text": payload.get("text")
-                or f"{payload.get('label_ko', '')} ({payload.get('category', '')})",
+                "matched_text": payload.get("text") or f"{payload.get('label_ko', '')} ({payload.get('category', '')})",
             }
         )
         candidates.append(payload)
@@ -58,23 +60,20 @@ async def link_concept_candidates(keyword: str, limit: int = 3) -> List[Dict[str
 
 
 async def link_concept(keyword: str) -> Optional[Dict[str, Any]]:
+    """Convenience wrapper that returns only the top concept candidate."""
     candidates = await link_concept_candidates(keyword, limit=1)
     return candidates[0] if candidates else None
 
 
-# =========================================================
-# [Step 2] Domain Retrieval Tools
-# =========================================================
 async def retrieve_benefit(concept_id: str):
-    """
-    GraphDB에서 해당 Concept과 연결된 Benefit(금액) 조회
-    """
+    """Fetch benefits tied to a concept with product/rider identity preserved."""
     started = time.perf_counter()
     logger.info("benefit retrieval started", extra={"concept_id": concept_id})
 
     query = f"""
-    MATCH (c:Concept {{concept_id: '{concept_id}'}})<-[:RELATED_TO]-(b:Benefit)<-[:HAS_BENEFIT]-(r:Rider)
+    MATCH (p:Product)-[:HAS_RIDER]->(r:Rider)-[:HAS_BENEFIT]->(b:Benefit)-[:RELATED_TO]->(c:Concept {{concept_id: '{concept_id}'}})
     RETURN {{
+        product_name: p.name,
         rider_name: r.name,
         benefit_name: b.name,
         amount: b.amount_text,
@@ -83,53 +82,54 @@ async def retrieve_benefit(concept_id: str):
     }}
     """
     results = await db.execute_cypher(query)
+    logger.info("benefit retrieval finished", extra={"concept_id": concept_id, "result_count": len(results or []), "duration_ms": _ms(started)})
     return results or []
 
 
 async def retrieve_exclusion(concept_id: str):
-    """
-    VectorDB에서 'EXCLUSION' 태그 + Concept 필터링 검색 후
-    GraphDB에서 연결 관계(RESTRICTS) 검증
-    """
+    """Find exclusion clauses and verify them against Graph relationships."""
     started = time.perf_counter()
     logger.info("exclusion retrieval started", extra={"concept_id": concept_id})
 
     filter_condition = models.Filter(
         must=[
             models.FieldCondition(key="tag", match=models.MatchValue(value="EXCLUSION")),
-            models.FieldCondition(
-                key="related_concepts", match=models.MatchAny(any=[concept_id])
-            ),
+            models.FieldCondition(key="related_concepts", match=models.MatchAny(any=[concept_id])),
         ]
     )
 
     vec = get_embedding("면책 지급제한 보장하지 않는 경우")
-    hits = await db.search_vector(
-        collection="insurance_knowledge",
-        vector=vec,
-        filter=filter_condition,
-        limit=3,
-    )
+    hits = await db.search_vector(collection="insurance_knowledge", vector=vec, filter=filter_condition, limit=3)
 
     valid_results = []
     for hit in hits or []:
-        clause_id = hit.payload.get("node_id")
-        rider_id = hit.payload.get("rider_id")
+        payload = hit.payload or {}
+        clause_id = payload.get("node_id")
+        rider_id = payload.get("rider_id")
 
         verify_query = f"""
-        MATCH (r:Rider {{rider_id: '{rider_id}'}})-[:RESTRICTS]->(c:Clause {{clause_id: '{clause_id}'}})
-        RETURN c.clause_id
+        MATCH (p:Product)-[:HAS_RIDER]->(r:Rider {{rider_id: '{rider_id}'}})-[:RESTRICTS]->(c:Clause {{clause_id: '{clause_id}'}})
+        RETURN {{
+            product_name: p.name,
+            rider_name: r.name,
+            clause_id: c.clause_id,
+            clause_title: c.title
+        }}
         """
         graph_check = await db.execute_cypher(verify_query)
 
         if graph_check:
+            meta = graph_check[0]
             valid_results.append(
                 {
-                    "text": hit.payload.get("text"),
+                    "text": payload.get("text"),
                     "score": float(getattr(hit, "score", 0.0) or 0.0),
                     "verified": True,
+                    "product_name": meta.get("product_name"),
+                    "rider_name": meta.get("rider_name"),
                     "rider_id": rider_id,
                     "clause_id": clause_id,
+                    "clause_title": meta.get("clause_title"),
                 }
             )
 
@@ -138,9 +138,7 @@ async def retrieve_exclusion(concept_id: str):
 
 
 async def retrieve_condition(concept_id: str):
-    """
-    Graph에서 condition_summary 조회 -> 내용 부실하면 Vector(Condition Tag) 검색
-    """
+    """Return condition-focused evidence, with vector fallback if needed."""
     started = time.perf_counter()
     logger.info("condition retrieval started", extra={"concept_id": concept_id})
     graph_data = await retrieve_benefit(concept_id)
@@ -152,25 +150,21 @@ async def retrieve_condition(concept_id: str):
         if len(condition_text) < 10 or "참조" in condition_text:
             logger.info("condition fallback to vector", extra={"concept_id": concept_id, "benefit_name": item.get("benefit_name")})
             vec = get_embedding(f"{item['benefit_name']} 지급 조건 상세")
-
             filter_cond = models.Filter(
                 must=[
                     models.FieldCondition(key="type", match=models.MatchValue(value="clause")),
                     models.FieldCondition(key="tag", match=models.MatchValue(value="CONDITION")),
-                    models.FieldCondition(
-                        key="related_concepts", match=models.MatchAny(any=[concept_id])
-                    ),
+                    models.FieldCondition(key="related_concepts", match=models.MatchAny(any=[concept_id])),
                 ]
             )
-            hits = await db.search_vector(
-                "insurance_knowledge", vec, filter=filter_cond, limit=1
-            )
-
+            hits = await db.search_vector("insurance_knowledge", vec, filter=filter_cond, limit=1)
             if hits:
                 condition_text = hits[0].payload.get("text")
 
         final_results.append(
             {
+                "product_name": item.get("product_name"),
+                "rider_name": item.get("rider_name"),
                 "benefit": item.get("benefit_name"),
                 "condition_detail": condition_text,
             }
@@ -181,9 +175,7 @@ async def retrieve_condition(concept_id: str):
 
 
 async def retrieve_term(keyword: str):
-    """
-    glossary 우선 검색, 없으면 clause 검색 fallback
-    """
+    """Search glossary first, then fall back to clause text search."""
     started = time.perf_counter()
     logger.info("term retrieval started", extra={"keyword": keyword})
     if not keyword:
@@ -191,13 +183,8 @@ async def retrieve_term(keyword: str):
 
     vec = get_embedding(keyword)
 
-    # 1) Glossary 우선
     try:
-        glossary_hits = await db.search_vector(
-            collection="glossary",
-            vector=vec,
-            limit=1,
-        )
+        glossary_hits = await db.search_vector(collection="glossary", vector=vec, limit=1)
         if glossary_hits:
             payload = glossary_hits[0].payload or {}
             result = {
@@ -210,41 +197,33 @@ async def retrieve_term(keyword: str):
             }
             logger.info("term retrieval finished", extra={"keyword": keyword, "source": "glossary", "duration_ms": _ms(started)})
             return result
-    except Exception as exc:
+    except Exception:
         logger.warning("term glossary search failed", extra={"keyword": keyword})
 
-    # 2) insurance_knowledge fallback
-    filter_cond = models.Filter(
-        must=[models.FieldCondition(key="type", match=models.MatchValue(value="clause"))]
-    )
-
-    hits = await db.search_vector(
-        collection="insurance_knowledge",
-        vector=vec,
-        filter=filter_cond,
-        limit=1,
-    )
+    filter_cond = models.Filter(must=[models.FieldCondition(key="type", match=models.MatchValue(value="clause"))])
+    hits = await db.search_vector(collection="insurance_knowledge", vector=vec, filter=filter_cond, limit=1)
 
     if hits:
+        payload = hits[0].payload or {}
         result = {
-            "definition": hits[0].payload.get("text", ""),
-            "category": hits[0].payload.get("tag", "GENERAL"),
+            "definition": payload.get("text", ""),
+            "category": payload.get("tag", "GENERAL"),
             "term_name": keyword,
             "source": "insurance_knowledge",
             "score": float(getattr(hits[0], "score", 0.0) or 0.0),
             "mapped_concept_id": None,
+            "product_name": payload.get("product_name"),
+            "rider_name": payload.get("rider_name"),
         }
         logger.info("term retrieval finished", extra={"keyword": keyword, "source": "insurance_knowledge", "duration_ms": _ms(started)})
         return result
+
     logger.info("term retrieval finished", extra={"keyword": keyword, "source": None, "duration_ms": _ms(started)})
     return None
 
 
 async def retrieve_comparison(concept_id: str, product_keywords: list):
-    """
-    [COMPARE_PRODUCTS]
-    여러 상품(키워드)에 대해 특정 Concept의 보장 내용을 비교 조회
-    """
+    """Return comparison evidence for product keywords under one concept."""
     started = time.perf_counter()
     logger.info("comparison retrieval started", extra={"concept_id": concept_id, "product_keywords": product_keywords})
 

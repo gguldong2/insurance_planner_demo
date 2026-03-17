@@ -325,7 +325,7 @@ function summarizeLogs(items) {
 function metricCard(icon, label, value, tone = 'default') {
   const toneClass = {
     default: 'bg-white border-gray-200 text-gray-900',
-    softBlue: 'bg-blue-50 border-blue-200 text-blue-900',
+    softBlue: 'bg-gray-50 border-gray-200 text-gray-900',
     softPurple: 'bg-violet-50 border-violet-200 text-violet-900',
     softGreen: 'bg-emerald-50 border-emerald-200 text-emerald-900',
     softAmber: 'bg-amber-50 border-amber-200 text-amber-900',
@@ -411,8 +411,8 @@ function App() {
       pill = 'bg-violet-50 text-violet-700 border-violet-200';
     } else if (/planner|task_plan/i.test(message)) {
       icon = <ListChecks size={14} />;
-      color = 'text-sky-600';
-      pill = 'bg-sky-50 text-sky-700 border-sky-200';
+      color = 'text-gray-600';
+      pill = 'bg-gray-100 text-gray-700 border-gray-200';
     } else if (/generator|Final/i.test(message)) {
       icon = <Sparkles size={14} />;
       color = 'text-emerald-600';
@@ -463,7 +463,7 @@ function App() {
           <div className="trace-task-plan">
             {log.task_plan.map((task, idx) => (
               <div key={idx} className="trace-task-item">
-                <ChevronRight size={14} className="text-sky-500 shrink-0 mt-0.5" />
+                <ChevronRight size={14} className="text-gray-400 shrink-0 mt-0.5" />
                 <div>
                   <div className="trace-task-item-title">
                     {task.task_type || task.title || `task_${idx + 1}`}
@@ -519,7 +519,7 @@ function App() {
               <div className={`flex gap-3 max-w-[82%] ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
                 <div
                   className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${
-                    msg.role === 'user' ? 'bg-blue-600 text-white' : 'bg-slate-900 text-white'
+                    msg.role === 'user' ? 'bg-gray-100 text-gray-800 border border-gray-200' : 'bg-slate-900 text-white'
                   }`}
                 >
                   {msg.role === 'user' ? <User size={16} /> : <Bot size={16} />}
@@ -527,7 +527,7 @@ function App() {
                 <div
                   className={`p-4 rounded-2xl text-sm leading-relaxed shadow-sm break-words ${
                     msg.role === 'user'
-                      ? 'bg-blue-600 text-white rounded-tr-none'
+                      ? 'bg-gray-100 text-gray-800 border border-gray-200 rounded-tr-none'
                       : 'bg-white text-gray-800 border border-gray-200 rounded-tl-none'
                   }`}
                 >
@@ -544,9 +544,9 @@ function App() {
                   <Bot size={16} />
                 </div>
                 <div className="bg-white border border-gray-200 p-4 rounded-2xl rounded-tl-none shadow-sm flex items-center gap-2">
-                  <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce" />
-                  <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce delay-75" />
-                  <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce delay-150" />
+                  <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" />
+                  <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce delay-75" />
+                  <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce delay-150" />
                 </div>
               </div>
             </div>

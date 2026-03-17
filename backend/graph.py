@@ -1,8 +1,23 @@
-# backend/graph.py
+"""LangGraph workflow for the insurance QA agent.
+
+This module wires the end-to-end execution graph used by the FastAPI app.
+The pipeline is intentionally split into small nodes so that each phase can be
+observed in logs and tightened independently.
+
+Execution flow
+--------------
+Analyzer -> Grounder -> Planner -> Executor -> Composer -> Guard -> Generator
+
+Key design goals
+----------------
+1. Keep the final answer grounded in retrieved evidence only.
+2. Preserve product/rider metadata all the way to the final answer.
+3. Keep the flow easy to debug with explicit node-level trace messages.
+"""
+
 import asyncio
 import json
 import logging
-import os
 import re
 import time
 from typing import Any, Dict, List, Optional, TypedDict
@@ -31,15 +46,20 @@ llm = ChatOpenAI(
     base_url="http://localhost:8000/v1",
     api_key="dummy",
     temperature=0,
-    extra_body={
-        "chat_template_kwargs": {
-            "enable_thinking": False
-        }
-    },
+    extra_body={"chat_template_kwargs": {"enable_thinking": False}},
 )
 
 
 class AgentState(TypedDict):
+    """Mutable state shared across LangGraph nodes.
+
+    The state stores both user-facing outputs and internal orchestration
+    artifacts. The important fields for grounding are:
+    - resolved_concepts: normalized concept matches from the grounding step
+    - task_results: raw retrieval outputs per task
+    - response_sections: structured sections prepared for answer generation
+    """
+
     question: str
     request_id: str
 
@@ -52,6 +72,7 @@ class AgentState(TypedDict):
     task_plan: List[Dict[str, Any]]
     task_results: List[Dict[str, Any]]
     response_sections: List[Dict[str, Any]]
+    guarded_sections: List[Dict[str, Any]]
 
     final_answer: str
     trace_log: List[str]
@@ -75,7 +96,6 @@ SECTION_INSTRUCTIONS = {
     "GET_EXCLUSION": "면책 및 제한 사항을 주의사항처럼 분명하게 설명하세요.",
     "COMPARE_PRODUCTS": "상품별 차이를 비교 형태로 정리하세요.",
 }
-
 
 ANALYZER_PROMPT = ChatPromptTemplate.from_messages(
     [
@@ -119,15 +139,17 @@ GENERATOR_PROMPT = ChatPromptTemplate.from_messages(
         (
             "system",
             """당신은 보험 QA 어시스턴트다.
-반드시 제공된 섹션 근거만 사용해 답하라.
-추측하거나 빈칸을 채우지 마라.
+최종 답변은 반드시 제공된 response_sections의 evidence만 사용해 작성하라.
+배경지식, 추측, 일반 상식으로 빈칸을 메우지 마라.
 
-규칙:
+강제 규칙:
 1. response_sections의 순서를 유지하라.
 2. 각 섹션은 해당 섹션의 evidence만 사용하라.
-3. 섹션 제목을 살려서 답하라.
-4. evidence가 부족한 섹션은 '확인된 근거가 부족하다'고 명시하라.
-5. 마지막에 짧은 요약을 추가하라.
+3. evidence에 없는 상품명, 특약명, 보장명은 새로 만들지 마라.
+4. 상품 또는 특약을 설명할 때 evidence 안에 product_name, rider_name이 있으면 반드시 함께 드러나게 써라.
+5. 비교/추천은 response_sections의 evidence에 실제 등장한 상품/특약만 대상으로 하라.
+6. evidence가 부족한 섹션은 '확인된 근거가 부족하다'고 명시하라.
+7. 마지막에 짧은 요약을 추가하라.
 """,
         ),
         (
@@ -149,10 +171,10 @@ GENERATOR_PROMPT = ChatPromptTemplate.from_messages(
 
 
 def update_trace(state: AgentState, node: str, msg: str) -> List[str]:
+    """Append a compact trace line while keeping the trace window bounded."""
     trace = list(state.get("trace_log", []) or [])
     trace.append(f"[{node}] {msg}")
     return trace[-50:]
-
 
 
 
@@ -160,16 +182,39 @@ def _req(state: AgentState) -> str:
     return state.get("request_id", "-")
 
 
+
 def _ms(start: float) -> int:
     return int((time.perf_counter() - start) * 1000)
 
+
+
 def remove_think_tag(text: str) -> str:
+    """Strip hidden thinking blocks that some serving templates may emit."""
     if not text:
         return ""
     return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
 
 
+
+def _needs_product_rider(task_type: str) -> bool:
+    """Return True when the final answer should carry product/rider identity."""
+    return task_type in {"GET_BENEFIT", "GET_CONDITION", "GET_EXCLUSION", "COMPARE_PRODUCTS"}
+
+
+
+def _has_product_rider(data: Any) -> bool:
+    """Check whether a piece of evidence includes usable product/rider metadata."""
+    if isinstance(data, dict):
+        if data.get("product_name") or data.get("rider_name"):
+            return True
+        return any(_has_product_rider(v) for v in data.values())
+    if isinstance(data, list):
+        return any(_has_product_rider(v) for v in data)
+    return False
+
+
 async def node_analyzer(state: AgentState) -> Dict[str, Any]:
+    """Classify the user request into a small, controlled task taxonomy."""
     started = time.perf_counter()
     logger.info("analyzer started", extra={"request_id": _req(state), "question": state["question"]})
     tasks: List[str] = ["CHIT_CHAT"]
@@ -191,7 +236,16 @@ async def node_analyzer(state: AgentState) -> Dict[str, Any]:
 
     tasks = _normalize_tasks(tasks)
     duration_ms = _ms(started)
-    logger.info("analyzer finished", extra={"request_id": _req(state), "tasks": tasks, "concept_keywords": concept_keywords, "product_keywords": product_keywords, "duration_ms": duration_ms})
+    logger.info(
+        "analyzer finished",
+        extra={
+            "request_id": _req(state),
+            "tasks": tasks,
+            "concept_keywords": concept_keywords,
+            "product_keywords": product_keywords,
+            "duration_ms": duration_ms,
+        },
+    )
     return {
         "tasks": tasks,
         "concept_keywords": concept_keywords,
@@ -206,13 +260,14 @@ async def node_analyzer(state: AgentState) -> Dict[str, Any]:
 
 
 async def node_grounder(state: AgentState) -> Dict[str, Any]:
+    """Resolve user concept keywords into known concept nodes."""
     started = time.perf_counter()
     keywords = list(dict.fromkeys(state.get("concept_keywords", []) or []))
     logger.info("grounder started", extra={"request_id": _req(state), "keywords": keywords, "keyword_count": len(keywords)})
     resolved_concepts: List[Dict[str, Any]] = []
 
     async def _resolve(keyword: str) -> Optional[Dict[str, Any]]:
-        candidates = await link_concept_candidates(keyword, limit=3, request_id=_req(state))
+        candidates = await link_concept_candidates(keyword, limit=3)
         if not candidates:
             return None
         top = candidates[0]
@@ -236,18 +291,23 @@ async def node_grounder(state: AgentState) -> Dict[str, Any]:
                 resolved_concepts.append(item)
 
     duration_ms = _ms(started)
-    logger.info("grounder finished", extra={"request_id": _req(state), "resolved_concept_ids": [x.get("concept_id") for x in resolved_concepts], "resolved_count": len(resolved_concepts), "duration_ms": duration_ms})
+    logger.info(
+        "grounder finished",
+        extra={
+            "request_id": _req(state),
+            "resolved_concept_ids": [x.get("concept_id") for x in resolved_concepts],
+            "resolved_count": len(resolved_concepts),
+            "duration_ms": duration_ms,
+        },
+    )
     return {
         "resolved_concepts": resolved_concepts,
-        "trace_log": update_trace(
-            state,
-            "Grounder",
-            f"resolved={len(resolved_concepts)} concepts, duration_ms={duration_ms}",
-        ),
+        "trace_log": update_trace(state, "Grounder", f"resolved={len(resolved_concepts)} concepts, duration_ms={duration_ms}"),
     }
 
 
 async def node_planner(state: AgentState) -> Dict[str, Any]:
+    """Build a minimal task plan from analyzer output and grounding results."""
     started = time.perf_counter()
     tasks = _normalize_tasks(state.get("tasks", []))
     resolved_concepts = state.get("resolved_concepts", []) or []
@@ -278,9 +338,7 @@ async def node_planner(state: AgentState) -> Dict[str, Any]:
                     "concept_id": resolved_concepts[0].get("concept_id") if resolved_concepts else None,
                 }
             else:
-                inputs = {
-                    "concept_id": resolved_concepts[0].get("concept_id") if resolved_concepts else None,
-                }
+                inputs = {"concept_id": resolved_concepts[0].get("concept_id") if resolved_concepts else None}
             plan.append(
                 {
                     "task_id": f"task_{idx}",
@@ -292,14 +350,16 @@ async def node_planner(state: AgentState) -> Dict[str, Any]:
                 }
             )
 
-    logger.info("planner finished", extra={"request_id": _req(state), "task_plan": plan, "task_count": len(plan), "duration_ms": _ms(started)})
+    duration_ms = _ms(started)
+    logger.info("planner finished", extra={"request_id": _req(state), "task_plan": plan, "task_count": len(plan), "duration_ms": duration_ms})
     return {
         "task_plan": plan,
-        "trace_log": update_trace(state, "Planner", f"planned={len(plan)} tasks, duration_ms={_ms(started)}"),
+        "trace_log": update_trace(state, "Planner", f"planned={len(plan)} tasks, duration_ms={duration_ms}"),
     }
 
 
 async def _execute_task(plan_item: Dict[str, Any], state: AgentState) -> Dict[str, Any]:
+    """Execute a single retrieval task and normalize its result shape."""
     started = time.perf_counter()
     task_type = plan_item["task_type"]
     inputs = plan_item.get("inputs", {})
@@ -386,18 +446,25 @@ async def _execute_task(plan_item: Dict[str, Any], state: AgentState) -> Dict[st
 
     result["duration_ms"] = _ms(started)
     result["evidence_count"] = len(result.get("evidence", []))
-    logger.info("executor task finished", extra={"request_id": _req(state), "task_type": task_type, "status": result["status"], "evidence_count": result["evidence_count"], "duration_ms": result["duration_ms"]})
+    logger.info(
+        "executor task finished",
+        extra={
+            "request_id": _req(state),
+            "task_type": task_type,
+            "status": result["status"],
+            "evidence_count": result["evidence_count"],
+            "duration_ms": result["duration_ms"],
+        },
+    )
     return result
 
 
 async def node_executor(state: AgentState) -> Dict[str, Any]:
+    """Run planned retrieval tasks, mostly in parallel, and collect results."""
     started = time.perf_counter()
     task_plan = state.get("task_plan", []) or []
     if not task_plan:
-        return {
-            "task_results": [],
-            "trace_log": update_trace(state, "Executor", "planned tasks not found"),
-        }
+        return {"task_results": [], "trace_log": update_trace(state, "Executor", "planned tasks not found")}
 
     runnable = [item for item in task_plan if item["task_type"] != "CHIT_CHAT"]
     results: List[Dict[str, Any]] = []
@@ -445,6 +512,7 @@ async def node_executor(state: AgentState) -> Dict[str, Any]:
 
 
 async def node_composer(state: AgentState) -> Dict[str, Any]:
+    """Convert raw task outputs into stable response sections for generation."""
     started = time.perf_counter()
     task_results = state.get("task_results", []) or []
     sections: List[Dict[str, Any]] = []
@@ -466,14 +534,54 @@ async def node_composer(state: AgentState) -> Dict[str, Any]:
             }
         )
 
-    logger.info("composer finished", extra={"request_id": _req(state), "section_count": len(sections), "duration_ms": _ms(started)})
+    duration_ms = _ms(started)
+    logger.info("composer finished", extra={"request_id": _req(state), "section_count": len(sections), "duration_ms": duration_ms})
     return {
         "response_sections": sections,
-        "trace_log": update_trace(state, "Composer", f"sections={len(sections)}, duration_ms={_ms(started)}"),
+        "trace_log": update_trace(state, "Composer", f"sections={len(sections)}, duration_ms={duration_ms}"),
+    }
+
+
+async def node_guard(state: AgentState) -> Dict[str, Any]:
+    """Apply a lightweight evidence guard before answer generation.
+
+    This node is intentionally code-based, not model-based, to keep latency low.
+    It rejects sections that need product/rider identity but do not carry it in
+    evidence, and it annotates thin sections so the generator does not overclaim.
+    """
+    started = time.perf_counter()
+    sections = state.get("response_sections", []) or []
+    guarded_sections: List[Dict[str, Any]] = []
+
+    for section in sections:
+        guarded = dict(section)
+        evidence = guarded.get("evidence", []) or []
+        needs_identity = _needs_product_rider(guarded.get("task_type", ""))
+
+        if not evidence:
+            guarded["guard_status"] = "no_evidence"
+            guarded["guard_note"] = "검색된 근거가 없어 확정 답변을 생성하지 않음"
+        elif needs_identity and not _has_product_rider(evidence):
+            guarded["guard_status"] = "identity_missing"
+            guarded["guard_note"] = "상품명 또는 특약명이 확인되지 않아 근거 부족으로 처리"
+            guarded["status"] = "no_evidence"
+            guarded["summary"] = "상품/특약 식별 근거 부족"
+        else:
+            guarded["guard_status"] = "passed"
+            guarded["guard_note"] = "근거 검증 통과"
+
+        guarded_sections.append(guarded)
+
+    duration_ms = _ms(started)
+    logger.info("guard finished", extra={"request_id": _req(state), "section_count": len(guarded_sections), "duration_ms": duration_ms})
+    return {
+        "guarded_sections": guarded_sections,
+        "trace_log": update_trace(state, "Guard", f"sections={len(guarded_sections)}, duration_ms={duration_ms}"),
     }
 
 
 async def node_generator(state: AgentState) -> Dict[str, Any]:
+    """Generate the final user-facing answer from guarded response sections."""
     started = time.perf_counter()
     task_types = state.get("tasks", []) or []
 
@@ -485,7 +593,7 @@ async def node_generator(state: AgentState) -> Dict[str, Any]:
             "trace_log": update_trace(state, "Generator", f"chit-chat response, duration_ms={_ms(started)}"),
         }
 
-    sections = state.get("response_sections", []) or []
+    sections = state.get("guarded_sections", []) or state.get("response_sections", []) or []
     if not sections:
         sections = [
             {
@@ -503,11 +611,7 @@ async def node_generator(state: AgentState) -> Dict[str, Any]:
     logger.info("generator started", extra={"request_id": _req(state), "tasks": task_types, "section_count": len(sections)})
 
     res = await (GENERATOR_PROMPT | llm).ainvoke(
-        {
-            "question": state["question"],
-            "tasks": payload_tasks,
-            "response_sections": payload_sections,
-        }
+        {"question": state["question"], "tasks": payload_tasks, "response_sections": payload_sections}
     )
 
     return {
@@ -516,15 +620,10 @@ async def node_generator(state: AgentState) -> Dict[str, Any]:
     }
 
 
+
 def _normalize_tasks(tasks: List[str]) -> List[str]:
-    allowed = {
-        "DEFINE_TERM",
-        "GET_BENEFIT",
-        "GET_CONDITION",
-        "GET_EXCLUSION",
-        "COMPARE_PRODUCTS",
-        "CHIT_CHAT",
-    }
+    """Normalize LLM-produced tasks into the fixed supported task set."""
+    allowed = {"DEFINE_TERM", "GET_BENEFIT", "GET_CONDITION", "GET_EXCLUSION", "COMPARE_PRODUCTS", "CHIT_CHAT"}
     normalized: List[str] = []
     for task in tasks or []:
         if task in allowed and task not in normalized:
@@ -542,6 +641,7 @@ workflow.add_node("grounder", node_grounder)
 workflow.add_node("planner", node_planner)
 workflow.add_node("executor", node_executor)
 workflow.add_node("composer", node_composer)
+workflow.add_node("guard", node_guard)
 workflow.add_node("generator", node_generator)
 
 workflow.add_edge(START, "analyzer")
@@ -549,7 +649,8 @@ workflow.add_edge("analyzer", "grounder")
 workflow.add_edge("grounder", "planner")
 workflow.add_edge("planner", "executor")
 workflow.add_edge("executor", "composer")
-workflow.add_edge("composer", "generator")
+workflow.add_edge("composer", "guard")
+workflow.add_edge("guard", "generator")
 workflow.add_edge("generator", END)
 
 app_graph = workflow.compile()

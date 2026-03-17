@@ -55,8 +55,9 @@ body {
   width: 2.75rem;
   height: 2.75rem;
   border-radius: 9999px;
-  background: #2563eb;
-  color: #ffffff;
+  background: #f3f4f6;
+  color: #111827;
+  border: 1px solid #e5e7eb;
 }
 
 .chat-header-title {
@@ -119,8 +120,8 @@ body {
 }
 
 .chat-input-box:focus-within {
-  border-color: #60a5fa;
-  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+  border-color: #9ca3af;
+  box-shadow: 0 0 0 4px rgba(17, 24, 39, 0.06);
 }
 
 .chat-input {
@@ -139,7 +140,7 @@ body {
   width: 2.5rem;
   height: 2.5rem;
   border-radius: 9999px;
-  background: #2563eb;
+  background: #111827;
   color: white;
   transition: background 0.15s ease;
   border: none;
@@ -147,7 +148,7 @@ body {
 }
 
 .chat-send-btn:hover {
-  background: #1d4ed8;
+  background: #374151;
 }
 
 .chat-send-btn:disabled {
@@ -157,7 +158,7 @@ body {
 
 .trace-shell {
   width: 460px;
-  background: #fbfdff;
+  background: #f9fafb;
   display: flex;
   flex-direction: column;
   flex-shrink: 0;

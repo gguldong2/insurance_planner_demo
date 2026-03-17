@@ -1,7 +1,7 @@
-# backend/main.py
+"""FastAPI entrypoint for the insurance QA backend."""
+
 import logging
 import time
-import traceback
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
@@ -30,10 +30,14 @@ app.add_middleware(
 
 
 class ChatRequest(BaseModel):
+    """Incoming chat request from the frontend."""
+
     query: str = Field(..., description="사용자 질문")
 
 
 class ChatResponse(BaseModel):
+    """Normalized API response returned to the frontend."""
+
     answer: str
     logs: List[str]
     tasks: List[str] = []
@@ -44,6 +48,7 @@ class ChatResponse(BaseModel):
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat_endpoint(req: ChatRequest):
+    """Run the LangGraph workflow for a single user question."""
     request_id = uuid4().hex[:12]
     started = time.perf_counter()
     logger.info("chat request started", extra={"request_id": request_id, "query": req.query})
@@ -59,6 +64,7 @@ async def chat_endpoint(req: ChatRequest):
             "task_plan": [],
             "task_results": [],
             "response_sections": [],
+            "guarded_sections": [],
             "final_answer": "",
             "trace_log": [],
             "node_models": {},
@@ -73,7 +79,6 @@ async def chat_endpoint(req: ChatRequest):
 
         result = await app_graph.ainvoke(initial_state, config=config)
         tasks = result.get("tasks", []) or []
-
         task_results = result.get("task_results", []) or []
         task_statuses = [
             {
@@ -94,7 +99,6 @@ async def chat_endpoint(req: ChatRequest):
             request_id=request_id,
             task_statuses=task_statuses,
         )
-
     except Exception as exc:
         logger.exception("chat request failed", extra={"request_id": request_id})
         raise HTTPException(status_code=500, detail=str(exc))
