@@ -132,39 +132,39 @@ ANALYZER_PROMPT = ChatPromptTemplate.from_messages(
 few-shot 예시 1:
 질문: 질병 없는 30세 남성이 들면 좋을 특약명과 상품을 추천해줘
 출력:
-{
+{{
   "intent": "recommend",
   "task_candidates": ["GET_BENEFIT", "GET_CONDITION", "GET_EXCLUSION", "RECOMMEND_PLANS"],
   "required_tasks": ["GET_BENEFIT", "GET_EXCLUSION", "RECOMMEND_PLANS"],
   "concept_keywords": [],
   "product_keywords": [],
-  "user_filters": {"age": 30, "gender": "male", "disease_history": "none"},
+  "user_filters": {{"age": 30, "gender": "male", "disease_history": "none"}},
   "notes": ["보험 추천 질문"]
-}
+}}
 
 few-shot 예시 2:
 질문: 안녕, 이 서비스 뭐야?
 출력:
-{
+{{
   "intent": "chit_chat",
   "task_candidates": ["CHIT_CHAT"],
   "required_tasks": ["CHIT_CHAT"],
   "concept_keywords": [],
   "product_keywords": [],
-  "user_filters": {},
+  "user_filters": {{}},
   "notes": ["가벼운 대화"]
-}
+}}
 
 출력 스키마:
-{
+{{
   "intent": "recommend|compare|explain|define_term|chit_chat",
   "task_candidates": ["..."],
   "required_tasks": ["..."],
   "concept_keywords": ["..."],
   "product_keywords": ["..."],
-  "user_filters": {"age": null, "gender": null, "disease_history": null, "coverage_focus": []},
+  "user_filters": {{"age": null, "gender": null, "disease_history": null, "coverage_focus": []}},
   "notes": ["..."]
-}
+}}
 """,
         ),
         ("user", "질문: {question}"),

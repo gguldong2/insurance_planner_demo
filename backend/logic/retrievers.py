@@ -110,7 +110,7 @@ async def retrieve_exclusion(concept_id: str) -> List[Dict[str, Any]]:
         rider_id = payload.get("rider_id")
 
         verify_query = f"""
-        MATCH (p:Product)-[:HAS_RIDER]->(r:Rider {{rider_id: '{rider_id}'}})-[rel:RESTRICTS|HAS_CLAUSE]->(c:Clause {{clause_id: '{clause_id}'}})
+        MATCH (p:Product)-[:HAS_RIDER]->(r:Rider {{rider_id: '{rider_id}'}})-[:RESTRICTS]->(c:Clause {{clause_id: '{clause_id}'}})
         RETURN {{
             company: p.company,
             product_id: p.product_id,
@@ -119,14 +119,27 @@ async def retrieve_exclusion(concept_id: str) -> List[Dict[str, Any]]:
             rider_name: r.name,
             clause_id: c.clause_id,
             clause_title: c.title,
-            relation_type: type(rel),
+            relation_type: 'RESTRICTS',
             tag: c.tag
-        }}
+        }} AS row
+        UNION ALL
+        MATCH (p:Product)-[:HAS_RIDER]->(r:Rider {{rider_id: '{rider_id}'}})-[:HAS_CLAUSE]->(c:Clause {{clause_id: '{clause_id}'}})
+        RETURN {{
+            company: p.company,
+            product_id: p.product_id,
+            product_name: p.name,
+            rider_id: r.rider_id,
+            rider_name: r.name,
+            clause_id: c.clause_id,
+            clause_title: c.title,
+            relation_type: 'HAS_CLAUSE',
+            tag: c.tag
+        }} AS row
         """
         graph_check = await db.execute_cypher(verify_query)
 
         if graph_check:
-            meta = graph_check[0]
+            meta = graph_check[0].get("row", graph_check[0]) if isinstance(graph_check[0], dict) else graph_check[0]
             valid_results.append(
                 {
                     "company": meta.get("company"),
@@ -299,14 +312,25 @@ async def retrieve_plan_catalog(
         concept_id: c.concept_id,
         concept_label: c.label_ko
     }) AS benefits
-    OPTIONAL MATCH (r)-[rel:RESTRICTS|HAS_CLAUSE]->(cl:Clause)
+
+    OPTIONAL MATCH (r)-[:HAS_CLAUSE]->(cl_general:Clause)
     WITH p, r, benefits, collect(DISTINCT {
-        clause_id: cl.clause_id,
-        title: cl.title,
-        content: cl.content,
-        relation_type: type(rel),
-        tag: cl.tag
-    }) AS clauses
+        clause_id: cl_general.clause_id,
+        title: cl_general.title,
+        content: cl_general.content,
+        relation_type: 'HAS_CLAUSE',
+        tag: cl_general.tag
+    }) AS general_clauses
+
+    OPTIONAL MATCH (r)-[:RESTRICTS]->(cl_restrict:Clause)
+    WITH p, r, benefits, general_clauses, collect(DISTINCT {
+        clause_id: cl_restrict.clause_id,
+        title: cl_restrict.title,
+        content: cl_restrict.content,
+        relation_type: 'RESTRICTS',
+        tag: cl_restrict.tag
+    }) AS restrict_clauses
+
     RETURN {
         company: p.company,
         product_id: p.product_id,
@@ -315,19 +339,23 @@ async def retrieve_plan_catalog(
         rider_name: r.name,
         renewal_type: r.renewal_type,
         benefits: benefits,
-        clauses: clauses
-    }
+        general_clauses: general_clauses,
+        restrict_clauses: restrict_clauses
+    } AS row
     """
     rows = await db.execute_cypher(query)
     rows = rows or []
 
     cleaned: List[Dict[str, Any]] = []
     product_keywords = [x for x in (product_keywords or []) if x]
-    for row in rows:
+    for raw in rows:
+        row = raw.get("row", raw) if isinstance(raw, dict) else raw
         if not isinstance(row, dict):
             continue
         benefits = [b for b in (row.get("benefits") or []) if isinstance(b, dict) and any(b.values())]
-        clauses = [c for c in (row.get("clauses") or []) if isinstance(c, dict) and any(c.values())]
+        general_clauses = [c for c in (row.get("general_clauses") or []) if isinstance(c, dict) and any(c.values())]
+        restrict_clauses = [c for c in (row.get("restrict_clauses") or []) if isinstance(c, dict) and any(c.values())]
+        clauses = general_clauses + restrict_clauses
         item = {**row, "benefits": benefits, "clauses": clauses}
 
         if concept_id:
