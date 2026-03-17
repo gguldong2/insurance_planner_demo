@@ -17,16 +17,25 @@ import {
 } from 'lucide-react';
 
 function renderInline(text) {
-  const parts = String(text || '').split(/(\*\*.*?\*\*|`.*?`)/g).filter(Boolean);
+  const parts = String(text || '')
+    .split(/(\*\*.*?\*\*|`.*?`)/g)
+    .filter(Boolean);
 
   return parts.map((part, index) => {
     if (part.startsWith('**') && part.endsWith('**')) {
-      return <strong key={index} className="font-semibold text-gray-900">{part.slice(2, -2)}</strong>;
+      return (
+        <strong key={index} className="font-semibold text-gray-900">
+          {part.slice(2, -2)}
+        </strong>
+      );
     }
 
     if (part.startsWith('`') && part.endsWith('`')) {
       return (
-        <code key={index} className="rounded bg-slate-100 px-1.5 py-0.5 text-[0.9em] text-slate-800">
+        <code
+          key={index}
+          className="rounded bg-slate-100 px-1.5 py-0.5 text-[0.9em] text-slate-800"
+        >
           {part.slice(1, -1)}
         </code>
       );
@@ -41,21 +50,17 @@ function renderMarkdown(text) {
 
   const normalized = String(text)
     .replace(/<think>[\s\S]*?<\/think>/gi, '')
-    .replace(/^Thinking Process:[\s\S]*?(?=
-
-|##|###|####|\S)/i, '')
+    .replace(/^Thinking Process:[\s\S]*?(?=\n\n|## |### |#### |# )/i, '')
     .trim();
 
-  const lines = normalized.replace(/
-/g, '
-').split('
-');
+  const lines = normalized.replace(/\r\n/g, '\n').split('\n');
   const elements = [];
   let i = 0;
   let key = 0;
 
   const isTableLine = (value) => /\|/.test(value);
-  const isTableDivider = (value) => /^\|?(\s*:?-{3,}:?\s*\|)+\s*:?-{3,}:?\s*\|?$/.test(value.trim());
+  const isTableDivider = (value) =>
+    /^\|?(\s*:?-{3,}:?\s*\|)+\s*:?-{3,}:?\s*\|?$/.test(value.trim());
 
   const renderTableCell = (value, cellKey, tag = 'td') => {
     const Tag = tag;
@@ -78,42 +83,58 @@ function renderMarkdown(text) {
         codeLines.push(lines[i]);
         i += 1;
       }
-      i += 1;
+      if (i < lines.length) i += 1;
+
       elements.push(
         <pre key={key++} className="markdown-pre">
-          <code>{codeLines.join('
-')}</code>
+          <code>{codeLines.join('\n')}</code>
         </pre>
       );
       continue;
     }
 
     if (trimmed.startsWith('#### ')) {
-      elements.push(<h4 key={key++} className="markdown-h4">{renderInline(trimmed.slice(5))}</h4>);
+      elements.push(
+        <h4 key={key++} className="markdown-h4">
+          {renderInline(trimmed.slice(5))}
+        </h4>
+      );
       i += 1;
       continue;
     }
 
     if (trimmed.startsWith('### ')) {
-      elements.push(<h3 key={key++} className="markdown-h3">{renderInline(trimmed.slice(4))}</h3>);
+      elements.push(
+        <h3 key={key++} className="markdown-h3">
+          {renderInline(trimmed.slice(4))}
+        </h3>
+      );
       i += 1;
       continue;
     }
 
     if (trimmed.startsWith('## ')) {
-      elements.push(<h2 key={key++} className="markdown-h2">{renderInline(trimmed.slice(3))}</h2>);
+      elements.push(
+        <h2 key={key++} className="markdown-h2">
+          {renderInline(trimmed.slice(3))}
+        </h2>
+      );
       i += 1;
       continue;
     }
 
     if (trimmed.startsWith('# ')) {
-      elements.push(<h1 key={key++} className="markdown-h1">{renderInline(trimmed.slice(2))}</h1>);
+      elements.push(
+        <h1 key={key++} className="markdown-h1">
+          {renderInline(trimmed.slice(2))}
+        </h1>
+      );
       i += 1;
       continue;
     }
 
-    if (trimmed.startsWith('---')) {
-      elements.push(<hr key={key++} className="my-4 border-gray-200" />);
+    if (/^-{3,}$/.test(trimmed)) {
+      elements.push(<hr key={key++} className="markdown-hr" />);
       i += 1;
       continue;
     }
@@ -124,6 +145,7 @@ function renderMarkdown(text) {
         quoteLines.push(lines[i].trim().replace(/^>\s?/, ''));
         i += 1;
       }
+
       elements.push(
         <blockquote key={key++} className="markdown-blockquote">
           {quoteLines.map((quoteLine, idx) => (
@@ -135,12 +157,22 @@ function renderMarkdown(text) {
     }
 
     if (isTableLine(trimmed) && i + 1 < lines.length && isTableDivider(lines[i + 1])) {
-      const headerCells = trimmed.replace(/^\||\|$/g, '').split('|').map((cell) => cell.trim());
+      const headerCells = trimmed
+        .replace(/^\||\|$/g, '')
+        .split('|')
+        .map((cell) => cell.trim());
+
       i += 2;
 
       const rows = [];
       while (i < lines.length && lines[i].trim() && isTableLine(lines[i].trim())) {
-        rows.push(lines[i].trim().replace(/^\||\|$/g, '').split('|').map((cell) => cell.trim()));
+        rows.push(
+          lines[i]
+            .trim()
+            .replace(/^\||\|$/g, '')
+            .split('|')
+            .map((cell) => cell.trim())
+        );
         i += 1;
       }
 
@@ -149,13 +181,17 @@ function renderMarkdown(text) {
           <table className="markdown-table">
             <thead>
               <tr>
-                {headerCells.map((cell, idx) => renderTableCell(cell, `h-${idx}`, 'th'))}
+                {headerCells.map((cell, idx) =>
+                  renderTableCell(cell, `h-${idx}`, 'th')
+                )}
               </tr>
             </thead>
             <tbody>
               {rows.map((row, rowIdx) => (
                 <tr key={`r-${rowIdx}`}>
-                  {headerCells.map((_, cellIdx) => renderTableCell(row[cellIdx] || '', `c-${rowIdx}-${cellIdx}`))}
+                  {headerCells.map((_, cellIdx) =>
+                    renderTableCell(row[cellIdx] || '', `c-${rowIdx}-${cellIdx}`)
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -171,6 +207,7 @@ function renderMarkdown(text) {
         items.push(lines[i].trim().replace(/^[-*]\s+/, ''));
         i += 1;
       }
+
       elements.push(
         <ul key={key++} className="markdown-ul">
           {items.map((item, idx) => (
@@ -187,6 +224,7 @@ function renderMarkdown(text) {
         items.push(lines[i].trim().replace(/^\d+\.\s+/, ''));
         i += 1;
       }
+
       elements.push(
         <ol key={key++} className="markdown-ol">
           {items.map((item, idx) => (
@@ -199,6 +237,7 @@ function renderMarkdown(text) {
 
     const paragraphLines = [trimmed];
     i += 1;
+
     while (
       i < lines.length &&
       lines[i].trim() &&
@@ -207,7 +246,7 @@ function renderMarkdown(text) {
       !/^\d+\.\s+/.test(lines[i].trim()) &&
       !/^>/.test(lines[i].trim()) &&
       !/^```/.test(lines[i].trim()) &&
-      !/^---/.test(lines[i].trim()) &&
+      !/^-{3,}$/.test(lines[i].trim()) &&
       !(isTableLine(lines[i].trim()) && i + 1 < lines.length && isTableDivider(lines[i + 1]))
     ) {
       paragraphLines.push(lines[i].trim());
@@ -345,7 +384,10 @@ function App() {
       setMessages((prev) => [...prev, botMsg]);
     } catch (error) {
       console.error(error);
-      setMessages((prev) => [...prev, { role: 'bot', text: '❌ Error: 서버와 연결할 수 없습니다.' }]);
+      setMessages((prev) => [
+        ...prev,
+        { role: 'bot', text: '❌ Error: 서버와 연결할 수 없습니다.' },
+      ]);
       setLogs((prev) => [...prev, `[System Error] ${error.message}`]);
     } finally {
       setIsLoading(false);
@@ -423,10 +465,14 @@ function App() {
               <div key={idx} className="trace-task-item">
                 <ChevronRight size={14} className="text-sky-500 shrink-0 mt-0.5" />
                 <div>
-                  <div className="trace-task-item-title">{task.task_type || task.title || `task_${idx + 1}`}</div>
+                  <div className="trace-task-item-title">
+                    {task.task_type || task.title || `task_${idx + 1}`}
+                  </div>
                   <div className="trace-task-item-meta">
                     {task.title || '제목 없음'}
-                    {Array.isArray(task.depends_on) && task.depends_on.length ? ` · depends ${task.depends_on.join(', ')}` : ''}
+                    {Array.isArray(task.depends_on) && task.depends_on.length
+                      ? ` · depends ${task.depends_on.join(', ')}`
+                      : ''}
                   </div>
                 </div>
               </div>
@@ -462,7 +508,9 @@ function App() {
             <div className="empty-state">
               <Bot size={52} className="mx-auto mb-4 opacity-50" />
               <p className="empty-state-title">무엇이든 물어보세요</p>
-              <p className="empty-state-desc">Agent가 워크플로우를 실행하고, 오른쪽 패널에 trace를 구조적으로 보여줍니다.</p>
+              <p className="empty-state-desc">
+                Agent가 워크플로우를 실행하고, 오른쪽 패널에 trace를 구조적으로 보여줍니다.
+              </p>
             </div>
           )}
 
@@ -470,12 +518,18 @@ function App() {
             <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
               <div className={`flex gap-3 max-w-[82%] ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
                 <div
-                  className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${msg.role === 'user' ? 'bg-blue-600 text-white' : 'bg-slate-900 text-white'}`}
+                  className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${
+                    msg.role === 'user' ? 'bg-blue-600 text-white' : 'bg-slate-900 text-white'
+                  }`}
                 >
                   {msg.role === 'user' ? <User size={16} /> : <Bot size={16} />}
                 </div>
                 <div
-                  className={`p-4 rounded-2xl text-sm leading-relaxed shadow-sm break-words ${msg.role === 'user' ? 'bg-blue-600 text-white rounded-tr-none' : 'bg-white text-gray-800 border border-gray-200 rounded-tl-none'}`}
+                  className={`p-4 rounded-2xl text-sm leading-relaxed shadow-sm break-words ${
+                    msg.role === 'user'
+                      ? 'bg-blue-600 text-white rounded-tr-none'
+                      : 'bg-white text-gray-800 border border-gray-200 rounded-tl-none'
+                  }`}
                 >
                   {msg.role === 'user' ? msg.text : renderMarkdown(msg.text)}
                 </div>
@@ -510,7 +564,11 @@ function App() {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
             />
-            <button onClick={sendMessage} disabled={isLoading || !input.trim()} className="chat-send-btn">
+            <button
+              onClick={sendMessage}
+              disabled={isLoading || !input.trim()}
+              className="chat-send-btn"
+            >
               <Send size={18} />
             </button>
           </div>
@@ -530,7 +588,12 @@ function App() {
           {metricCard(<Hash size={16} />, 'Request ID', traceSummary.requestId, 'softBlue')}
           {metricCard(<Cpu size={16} />, 'Mode', traceSummary.mode, 'softPurple')}
           {metricCard(<ListChecks size={16} />, 'Task Count', traceSummary.taskCount, 'softGreen')}
-          {metricCard(<TimerReset size={16} />, 'Latest', traceSummary.latestDuration, traceSummary.latestStatus === 'ERROR' ? 'softRed' : 'softAmber')}
+          {metricCard(
+            <TimerReset size={16} />,
+            'Latest',
+            traceSummary.latestDuration,
+            traceSummary.latestStatus === 'ERROR' ? 'softRed' : 'softAmber'
+          )}
         </div>
 
         <div className="trace-section">
@@ -538,7 +601,9 @@ function App() {
           {traceSummary.selectedTasks.length > 0 ? (
             <div className="trace-chip-wrap">
               {traceSummary.selectedTasks.map((task) => (
-                <span key={task} className="trace-chip trace-chip-strong">{task}</span>
+                <span key={task} className="trace-chip trace-chip-strong">
+                  {task}
+                </span>
               ))}
             </div>
           ) : (
@@ -559,7 +624,9 @@ function App() {
         <div className="trace-log-list">
           {parsedLogs.length === 0 ? (
             <div className="trace-empty-state">
-              대기 중...<br />워크플로우 실행 기록이 여기에 표시됩니다.
+              대기 중...
+              <br />
+              워크플로우 실행 기록이 여기에 표시됩니다.
             </div>
           ) : (
             parsedLogs.map((log, idx) => renderLogItem(log, idx))
