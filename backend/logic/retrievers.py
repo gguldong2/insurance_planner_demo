@@ -20,6 +20,16 @@ from backend.db.runtime_conn import RuntimeDB
 logger = logging.getLogger(__name__)
 
 
+def _normalize_keyword_text(text: str) -> str:
+    text = (text or "").lower()
+    text = text.replace(" ", "")
+    text = text.replace("-", "")
+    text = text.replace("_", "")
+    text = text.replace("(", "").replace(")", "")
+    text = text.replace("[", "").replace("]", "")
+    return text
+
+
 def _ms(start: float) -> int:
     return int((time.perf_counter() - start) * 1000)
 
@@ -365,8 +375,9 @@ async def retrieve_plan_catalog(
             item["benefits"] = concept_filtered
 
         if product_keywords:
-            text = f"{item.get('company', '')} {item.get('product_name', '')} {item.get('rider_name', '')}"
-            if not any(keyword in text for keyword in product_keywords):
+            haystack = _normalize_keyword_text(f"{item.get('company', '')} {item.get('product_name', '')} {item.get('rider_name', '')}")
+            normalized_keywords = [_normalize_keyword_text(k) for k in product_keywords if k]
+            if normalized_keywords and not any(keyword in haystack for keyword in normalized_keywords):
                 continue
 
         cleaned.append(item)

@@ -4,9 +4,12 @@ Execution flow
 --------------
 Analyzer -> Grounder -> Planner -> Executor -> Composer -> Guard -> Generator
 
-This version is intentionally more explicit about two requirements:
+Design goals
+------------
 1. Insurance-domain answers must stay inside retrieved evidence.
-2. Recommendation/comparison should operate on company-product-rider plan units.
+2. Recommendation/comparison must operate on company-product-rider plan units.
+3. Full names from retrieved data must be preserved without shortening.
+4. Limits for retrieval, final candidates, and answer display are explicit.
 """
 
 from __future__ import annotations
@@ -46,10 +49,16 @@ llm = ChatOpenAI(
     extra_body={"chat_template_kwargs": {"enable_thinking": False}},
 )
 
+# Explicit limits for retrieval / final candidates / answer display.
+INITIAL_RETRIEVAL_LIMIT = 12
+FINAL_CANDIDATE_LIMIT = 6
+RECOMMEND_ANSWER_TOP_N = 3
+COMPARE_ANSWER_TOP_N = 2
+MAX_EVIDENCE_PER_CANDIDATE = 3
+MAX_SECTION_EVIDENCE = 6
+
 
 class AgentState(TypedDict, total=False):
-    """Mutable state shared across LangGraph nodes."""
-
     question: str
     request_id: str
 
@@ -69,6 +78,7 @@ class AgentState(TypedDict, total=False):
     guarded_sections: List[Dict[str, Any]]
     plan_candidates: List[Dict[str, Any]]
     allowed_entities: Dict[str, Any]
+    answer_skeleton: Dict[str, Any]
 
     final_answer: str
     trace_log: List[str]
@@ -87,12 +97,12 @@ TASK_TITLES = {
 }
 
 SECTION_INSTRUCTIONS = {
-    "DEFINE_TERM": "용어의 의미를 먼저 간단하고 명확하게 설명하세요.",
+    "DEFINE_TERM": "용어의 의미를 간단하고 명확하게 설명하세요.",
     "GET_BENEFIT": "보장 항목과 금액을 정확하게 정리하세요.",
-    "GET_CONDITION": "지급 요건과 시점을 조건 중심으로 설명하세요.",
-    "GET_EXCLUSION": "면책 및 제한 사항을 주의사항처럼 분명하게 설명하세요.",
-    "COMPARE_PLANS": "회사명-상품명-특약명 세트 기준으로 차이를 비교하세요.",
-    "RECOMMEND_PLANS": "회사명-상품명-특약명 세트 기준으로 추천 이유와 유의점을 정리하세요.",
+    "GET_CONDITION": "지급조건, 가입조건, 유지조건을 구분해서 설명하세요.",
+    "GET_EXCLUSION": "면책, 횟수제한, 금액제한, 특정질환 제외를 구분해서 설명하세요.",
+    "COMPARE_PLANS": "회사명-상품명-특약명 세트 기준으로 보장 항목, 지급 조건, 제한/면책, 사용자 적합성을 비교하세요.",
+    "RECOMMEND_PLANS": "회사명-상품명-특약명 세트 기준으로 추천 이유, 보장 항목, 지급 조건, 제한/면책, 유의사항을 정리하세요.",
 }
 
 ANALYZER_PROMPT = ChatPromptTemplate.from_messages(
@@ -123,8 +133,8 @@ ANALYZER_PROMPT = ChatPromptTemplate.from_messages(
 2. 추천 intent면 RECOMMEND_PLANS를 포함하라.
 3. 비교 intent면 COMPARE_PLANS를 포함하라.
 4. 추천/비교 intent에서는 필요한 설명 task도 함께 후보에 넣어라.
-5. 추후 tool 확장을 고려해 task_candidates는 동적으로 선택하되, 현재 질문 해결에 꼭 필요한 task는 required_tasks에 넣어라.
-6. 상품명/플랜명/브랜드명/시리즈명처럼 보이는 표현은 product_keywords에 넣어라.
+5. task_candidates는 동적으로 선택하되, 현재 질문 해결에 꼭 필요한 task는 required_tasks에 넣어라.
+6. 회사명/상품명/특약명처럼 보이는 표현은 product_keywords에 넣어라.
 7. 보장 개념, 질병, 치료, 약관 용어처럼 보이는 표현은 concept_keywords에 넣어라.
 8. 나이/성별/질병 이력처럼 보이는 정보는 user_filters에 구조화하라.
 9. JSON만 출력하라.
@@ -176,21 +186,33 @@ GENERATOR_PROMPT = ChatPromptTemplate.from_messages(
         (
             "system",
             """당신은 보험 QA 어시스턴트다.
-최종 답변은 반드시 제공된 response_sections의 evidence와 allowed_entities만 사용해 작성하라.
+최종 답변은 반드시 제공된 answer_skeleton과 allowed_entities만 사용해 작성하라.
 배경지식, 추측, 일반 상식으로 빈칸을 메우지 마라.
 
 강제 규칙:
-1. response_sections의 순서를 유지하라.
-2. 각 섹션은 해당 섹션의 evidence만 사용하라.
-3. allowed_entities에 없는 회사명, 상품명, 특약명은 새로 만들지 마라.
-4. 추천/비교는 반드시 회사명 / 상품명 / 특약명 세트를 같이 쓰라.
-5. 각 추천/비교 항목에는 추천 이유 또는 비교 포인트를 근거 중심으로 적어라.
-6. evidence가 부족한 섹션은 '확인된 근거가 부족하다'고 명시하라.
-7. 마지막에 짧은 요약을 추가하라.
+1. 회사명 / 상품명 / 특약명은 전달된 full name 그대로 사용하라. 축약, 생략, 재작성 금지.
+2. 추천/비교는 후보별 섹션을 유지하라. pooled 서술 금지.
+3. 추천 답변에서는 각 후보별로 추천 이유, 보장 항목, 지급 조건, 제한/면책, 유의사항을 적어라.
+4. 비교 답변에서는 각 후보별로 보장 항목, 지급 조건, 제한/면책, 사용자 적합성을 고정 축으로 비교하라.
+5. condition은 지급조건/가입조건/유지조건으로, exclusion은 면책/횟수제한/금액제한/특정질환 제외로 구분해 설명하라.
+6. 숫자 점수 자체는 답변에 그대로 쓰지 말고, 점수의 근거 텍스트를 자연어로 설명하라.
+7. 근거가 부족한 항목은 '확인된 근거가 부족하다'고 명시하라.
 
-few-shot 예시:
-입력 섹션에 한화생명 / Need AI 암보험 / 특정 특약 evidence가 있으면,
-답변은 반드시 "한화생명 / Need AI 암보험 / 특정 특약" 형태로 서술해야 한다.
+recommend 템플릿 예시:
+- 보험사 / 상품명 / 특약명
+  - 추천 이유:
+  - 보장 항목:
+  - 지급 조건:
+  - 제한/면책:
+  - 유의사항:
+
+compare 템플릿 예시:
+- 후보 A: 보험사 / 상품명 / 특약명
+- 후보 B: 보험사 / 상품명 / 특약명
+- 보장 항목 비교
+- 지급 조건 비교
+- 제한/면책 비교
+- 사용자 적합성 비교
 """,
         ),
         (
@@ -204,8 +226,8 @@ few-shot 예시:
 [허용 엔티티]
 {allowed_entities}
 
-[응답 섹션]
-{response_sections}
+[답변 뼈대]
+{answer_skeleton}
 
 위 정보를 바탕으로 한국어로 답하라.
 """,
@@ -213,28 +235,11 @@ few-shot 예시:
     ]
 )
 
-
 INSURANCE_HINTS = (
-    "보험",
-    "특약",
-    "상품",
-    "약관",
-    "보장",
-    "면책",
-    "제외",
-    "추천",
-    "비교",
-    "진단금",
-    "입원",
-    "수술",
-    "지급",
-    "암",
+    "보험", "특약", "상품", "약관", "보장", "면책", "제외", "추천", "비교",
+    "진단금", "입원", "수술", "지급", "암",
 )
 
-
-# ---------------------------------------------------------------------------
-# Utility helpers
-# ---------------------------------------------------------------------------
 
 def update_trace(state: AgentState, node: str, msg: str) -> List[str]:
     trace = list(state.get("trace_log", []) or [])
@@ -270,13 +275,8 @@ def _normalize_task_name(task: str) -> Optional[str]:
     }
     task = aliases.get(task, task)
     allowed = {
-        "DEFINE_TERM",
-        "GET_BENEFIT",
-        "GET_CONDITION",
-        "GET_EXCLUSION",
-        "COMPARE_PLANS",
-        "RECOMMEND_PLANS",
-        "CHIT_CHAT",
+        "DEFINE_TERM", "GET_BENEFIT", "GET_CONDITION", "GET_EXCLUSION",
+        "COMPARE_PLANS", "RECOMMEND_PLANS", "CHIT_CHAT",
     }
     return task if task in allowed else None
 
@@ -291,7 +291,7 @@ def _normalize_tasks(tasks: List[str]) -> List[str]:
         return ["CHIT_CHAT"]
     if "CHIT_CHAT" in normalized and len(normalized) > 1:
         normalized = [t for t in normalized if t != "CHIT_CHAT"]
-    return normalized[:6]
+    return normalized[:8]
 
 
 def _derive_intent_from_tasks(tasks: List[str], question: str) -> str:
@@ -319,12 +319,21 @@ def _extract_inline_filters(question: str, existing: Optional[Dict[str, Any]] = 
     if any(token in q for token in ["질병 없는", "질병없", "병력 없음", "질병 없음"]):
         filters["disease_history"] = "none"
     coverage_focus = list(filters.get("coverage_focus") or [])
-    for token in ["암", "진단금", "수술비", "입원비", "통원"]:
+    for token in ["암", "진단금", "수술", "입원", "통원", "항암", "방사선"]:
         if token in q and token not in coverage_focus:
             coverage_focus.append(token)
     if coverage_focus:
         filters["coverage_focus"] = coverage_focus
     return filters
+
+
+def _parse_requested_answer_count(question: str, intent: str) -> int:
+    q = question or ""
+    m = re.search(r"(\d+)개", q)
+    requested = int(m.group(1)) if m else 0
+    if intent == "compare":
+        return max(COMPARE_ANSWER_TOP_N, min(requested or COMPARE_ANSWER_TOP_N, FINAL_CANDIDATE_LIMIT))
+    return max(1, min(requested or RECOMMEND_ANSWER_TOP_N, FINAL_CANDIDATE_LIMIT))
 
 
 def _needs_product_rider(task_type: str) -> bool:
@@ -341,23 +350,20 @@ def _has_product_rider(data: Any) -> bool:
     return False
 
 
-def _flatten_allowed_entities(sections: List[Dict[str, Any]]) -> Dict[str, Any]:
+def _flatten_allowed_entities_from_candidates(candidates: List[Dict[str, Any]]) -> Dict[str, Any]:
     companies, products, riders, pairs = set(), set(), set(), set()
-    for section in sections:
-        for item in section.get("evidence", []) or []:
-            if not isinstance(item, dict):
-                continue
-            company = item.get("company")
-            product_name = item.get("product_name")
-            rider_name = item.get("rider_name")
-            if company:
-                companies.add(company)
-            if product_name:
-                products.add(product_name)
-            if rider_name:
-                riders.add(rider_name)
-            if product_name or rider_name:
-                pairs.add(f"{company or '-'}::{product_name or '-'}::{rider_name or '-'}")
+    for item in candidates or []:
+        company = item.get("company")
+        product_name = item.get("product_name")
+        rider_name = item.get("rider_name")
+        if company:
+            companies.add(company)
+        if product_name:
+            products.add(product_name)
+        if rider_name:
+            riders.add(rider_name)
+        if product_name or rider_name:
+            pairs.add(f"{company or '-'}::{product_name or '-'}::{rider_name or '-'}")
     return {
         "companies": sorted(companies),
         "products": sorted(products),
@@ -367,13 +373,11 @@ def _flatten_allowed_entities(sections: List[Dict[str, Any]]) -> Dict[str, Any]:
 
 
 def _build_candidate_key(item: Dict[str, Any]) -> str:
-    return "::".join(
-        [
-            str(item.get("company") or "-"),
-            str(item.get("product_id") or item.get("product_name") or "-"),
-            str(item.get("rider_id") or item.get("rider_name") or "-"),
-        ]
-    )
+    return "::".join([
+        str(item.get("company") or "-"),
+        str(item.get("product_id") or item.get("product_name") or "-"),
+        str(item.get("rider_id") or item.get("rider_name") or "-"),
+    ])
 
 
 def _text_len_score(text: str) -> int:
@@ -389,8 +393,28 @@ def _text_len_score(text: str) -> int:
     return 10 if length else 0
 
 
+def _classify_condition_type(text: str) -> str:
+    t = text or ""
+    if any(x in t for x in ["가입", "계약"]):
+        return "가입조건"
+    if any(x in t for x in ["유지", "갱신"]):
+        return "유지조건"
+    return "지급조건"
+
+
+def _classify_exclusion_type(text: str, title: str = "") -> str:
+    blob = f"{title} {text}".strip()
+    if any(x in blob for x in ["횟수", "연 ", "회 한도", "최대"]):
+        return "횟수제한"
+    if any(x in blob for x in ["금액", "감액", "절반", "1년 미만"]):
+        return "금액제한"
+    if any(x in blob for x in ["기타피부암", "갑상선암", "제외", "특정질환"]):
+        return "특정질환 제외"
+    return "면책"
+
+
 def _condition_clarity_score(candidate: Dict[str, Any]) -> int:
-    conditions = [x for x in (candidate.get("conditions") or []) if x]
+    conditions = [x.get("condition_summary") for x in (candidate.get("benefits") or []) if x.get("condition_summary")]
     if not conditions:
         return 20
     base = sum(_text_len_score(x) for x in conditions) / max(len(conditions), 1)
@@ -403,8 +427,6 @@ def _benefit_match_score(candidate: Dict[str, Any], user_filters: Dict[str, Any]
     if not benefits:
         return 0
     focus_tokens = list(user_filters.get("coverage_focus") or [])
-    if not focus_tokens:
-        focus_tokens = []
     score = 20
     benefit_text = " ".join(
         f"{b.get('benefit_name', '')} {b.get('amount_text', '')} {b.get('condition_summary', '')}" for b in benefits
@@ -427,10 +449,13 @@ def _coverage_breadth_score(candidate: Dict[str, Any]) -> int:
 
 def _exclusion_penalty(candidate: Dict[str, Any]) -> int:
     clauses = candidate.get("clauses") or []
-    restrictive = [c for c in clauses if c.get("relation_type") == "RESTRICTS" or c.get("tag") in {"EXCLUSION", "LIMIT", "RESTRICTION"}]
+    restrictive = [
+        c for c in clauses
+        if c.get("relation_type") == "RESTRICTS" or c.get("tag") in {"EXCLUSION", "LIMIT", "RESTRICTION"}
+    ]
     penalty = len(restrictive) * 12
     for clause in restrictive:
-        text = (clause.get("content") or "") + " " + (clause.get("title") or "")
+        text = f"{clause.get('content', '')} {clause.get('title', '')}".strip()
         if any(token in text for token in ["제외", "면책", "지급하지", "보장하지", "한도"]):
             penalty += 8
     return min(80, penalty)
@@ -462,12 +487,10 @@ def _score_plan_candidates(candidates: List[Dict[str, Any]], user_filters: Dict[
         exclusion_penalty = _exclusion_penalty(candidate)
         coverage_breadth = _coverage_breadth_score(candidate)
         user_filter_match = _user_filter_match_score(candidate, user_filters, question)
-
         is_eligible = bool(candidate.get("product_name") and candidate.get("rider_name"))
         exclusion_block = exclusion_penalty >= 70
         if exclusion_block:
             is_eligible = False
-
         final_score = round(
             benefit_match * 0.35
             + condition_clarity * 0.20
@@ -476,39 +499,73 @@ def _score_plan_candidates(candidates: List[Dict[str, Any]], user_filters: Dict[
             + user_filter_match * 0.35,
             2,
         )
-
-        scored.append(
-            {
-                **candidate,
-                "score_breakdown": {
-                    "benefit_match_score": benefit_match,
-                    "condition_clarity_score": condition_clarity,
-                    "exclusion_penalty": exclusion_penalty,
-                    "coverage_breadth_score": coverage_breadth,
-                    "user_filter_match_score": user_filter_match,
-                    "final_score": final_score,
-                },
-                "is_eligible": is_eligible,
-                "ineligible_reason": "exclusion_penalty_too_high" if exclusion_block else (None if is_eligible else "identity_missing"),
-            }
-        )
-
+        reason_codes = []
+        if benefit_match >= 60:
+            reason_codes.append("BENEFIT_MATCH_HIGH")
+        if condition_clarity >= 60:
+            reason_codes.append("CONDITION_CLEAR")
+        if exclusion_penalty >= 30:
+            reason_codes.append("EXCLUSION_PRESENT")
+        if user_filter_match >= 70:
+            reason_codes.append("USER_FIT_HIGH")
+        scored.append({
+            **candidate,
+            "score_breakdown": {
+                "benefit_match_score": benefit_match,
+                "condition_clarity_score": condition_clarity,
+                "exclusion_penalty": exclusion_penalty,
+                "coverage_breadth_score": coverage_breadth,
+                "user_filter_match_score": user_filter_match,
+                "final_score": final_score,
+            },
+            "reason_codes": reason_codes,
+            "is_eligible": is_eligible,
+            "ineligible_reason": "exclusion_penalty_too_high" if exclusion_block else (None if is_eligible else "identity_missing"),
+        })
     scored.sort(key=lambda x: (x.get("is_eligible", False), x["score_breakdown"]["final_score"]), reverse=True)
     return scored
 
 
-def _candidate_to_evidence(candidate: Dict[str, Any]) -> Dict[str, Any]:
-    benefits = candidate.get("benefits") or []
-    clauses = candidate.get("clauses") or []
-    top_benefits = benefits[:3]
-    top_clauses = clauses[:2]
-    recommend_reason = []
-    if top_benefits:
-        recommend_reason.append(f"관련 보장 {len(benefits)}건이 확인됨")
-    if candidate["score_breakdown"].get("condition_clarity_score", 0) >= 70:
-        recommend_reason.append("조건 설명이 비교적 명확함")
-    if candidate["score_breakdown"].get("exclusion_penalty", 0) >= 20:
-        recommend_reason.append("제한/면책 조항 확인 필요")
+def _prepare_candidate(candidate: Dict[str, Any]) -> Dict[str, Any]:
+    benefits = [b for b in (candidate.get("benefits") or []) if isinstance(b, dict)]
+    clauses = [c for c in (candidate.get("clauses") or []) if isinstance(c, dict)]
+    own_conditions = []
+    for benefit in benefits:
+        condition_text = benefit.get("condition_summary") or ""
+        if condition_text:
+            own_conditions.append({
+                "benefit_name": benefit.get("benefit_name"),
+                "condition_summary": condition_text,
+                "condition_type": _classify_condition_type(condition_text),
+            })
+    own_exclusions = []
+    own_general_clauses = []
+    for clause in clauses:
+        item = {
+            "clause_id": clause.get("clause_id"),
+            "title": clause.get("title"),
+            "content": clause.get("content"),
+            "relation_type": clause.get("relation_type"),
+            "tag": clause.get("tag"),
+        }
+        if clause.get("relation_type") == "RESTRICTS" or clause.get("tag") in {"EXCLUSION", "LIMIT", "RESTRICTION"}:
+            item["exclusion_type"] = _classify_exclusion_type(clause.get("content", ""), clause.get("title", ""))
+            own_exclusions.append(item)
+        else:
+            own_general_clauses.append(item)
+    score = candidate.get("score_breakdown", {})
+    reasons = []
+    if score.get("benefit_match_score", 0) >= 60:
+        reasons.append("관련 보장 항목이 비교적 풍부합니다.")
+    if score.get("condition_clarity_score", 0) >= 60:
+        reasons.append("지급 조건 설명이 비교적 명확합니다.")
+    if score.get("user_filter_match_score", 0) >= 70:
+        reasons.append("질문에서 제시한 사용자 조건과의 적합성이 높게 평가되었습니다.")
+    cautions = []
+    if own_exclusions:
+        cautions.append("제한/면책 조항이 있어 세부 조건 확인이 필요합니다.")
+    if score.get("condition_clarity_score", 0) < 40:
+        cautions.append("지급 조건 설명이 단순하지 않아 약관 세부 확인이 필요합니다.")
     return {
         "company": candidate.get("company"),
         "product_id": candidate.get("product_id"),
@@ -516,27 +573,118 @@ def _candidate_to_evidence(candidate: Dict[str, Any]) -> Dict[str, Any]:
         "rider_id": candidate.get("rider_id"),
         "rider_name": candidate.get("rider_name"),
         "renewal_type": candidate.get("renewal_type"),
-        "benefits": top_benefits,
-        "clauses": top_clauses,
-        "score_breakdown": candidate.get("score_breakdown"),
+        "benefits": benefits,
+        "own_conditions": own_conditions,
+        "own_exclusions": own_exclusions,
+        "own_general_clauses": own_general_clauses,
+        "score_breakdown": score,
+        "reason_codes": candidate.get("reason_codes", []),
+        "recommend_reasons": reasons,
+        "cautions": cautions,
         "is_eligible": candidate.get("is_eligible"),
         "ineligible_reason": candidate.get("ineligible_reason"),
-        "recommend_reason": recommend_reason,
     }
 
 
-def _is_compare_question(question: str) -> bool:
-    return any(token in (question or "") for token in ["비교", "차이", "더 나은", "무엇이 더"])
+def _compact_text(text: str, limit: int = 220) -> str:
+    text = (text or "").strip()
+    return text if len(text) <= limit else text[:limit].rstrip() + "…"
 
 
-# ---------------------------------------------------------------------------
-# LangGraph nodes
-# ---------------------------------------------------------------------------
+def _compact_candidate_for_answer(candidate: Dict[str, Any]) -> Dict[str, Any]:
+    prepared = _prepare_candidate(candidate)
+    benefits = []
+    for benefit in prepared["benefits"][:MAX_EVIDENCE_PER_CANDIDATE]:
+        benefits.append({
+            "benefit_name": benefit.get("benefit_name"),  # full name preserved
+            "amount_text": benefit.get("amount_text"),
+            "condition_summary": _compact_text(benefit.get("condition_summary", ""), 180),
+        })
+    conditions = []
+    for condition in prepared["own_conditions"][:MAX_EVIDENCE_PER_CANDIDATE]:
+        conditions.append({
+            "benefit_name": condition.get("benefit_name"),
+            "condition_type": condition.get("condition_type"),
+            "condition_summary": _compact_text(condition.get("condition_summary", ""), 180),
+        })
+    exclusions = []
+    for exclusion in prepared["own_exclusions"][:MAX_EVIDENCE_PER_CANDIDATE]:
+        exclusions.append({
+            "title": exclusion.get("title"),
+            "exclusion_type": exclusion.get("exclusion_type"),
+            "content": _compact_text(exclusion.get("content", ""), 180),
+        })
+    return {
+        "company": prepared.get("company"),
+        "product_name": prepared.get("product_name"),
+        "rider_name": prepared.get("rider_name"),
+        "renewal_type": prepared.get("renewal_type"),
+        "benefits": benefits,
+        "conditions": conditions,
+        "exclusions": exclusions,
+        "recommend_reasons": prepared.get("recommend_reasons", []),
+        "cautions": prepared.get("cautions", []),
+        "score_breakdown": prepared.get("score_breakdown", {}),
+        "is_eligible": prepared.get("is_eligible"),
+    }
+
+
+def _build_answer_skeleton(state: AgentState) -> Dict[str, Any]:
+    intent = state.get("intent", "explain")
+    question = state.get("question", "")
+    plan_candidates = state.get("plan_candidates", []) or []
+    answer_top_n = _parse_requested_answer_count(question, intent)
+    selected = plan_candidates[:answer_top_n]
+    selected_compact = [_compact_candidate_for_answer(c) for c in selected]
+
+    if intent == "recommend":
+        return {
+            "intent": "recommend",
+            "answer_top_n": answer_top_n,
+            "candidates": selected_compact,
+            "output_order": [
+                "보험사 / 상품명 / 특약명",
+                "추천 이유",
+                "보장 항목",
+                "지급 조건",
+                "제한/면책",
+                "유의사항",
+            ],
+        }
+    if intent == "compare":
+        compare_candidates = selected_compact[: max(COMPARE_ANSWER_TOP_N, answer_top_n)]
+        return {
+            "intent": "compare",
+            "answer_top_n": len(compare_candidates),
+            "candidates": compare_candidates,
+            "comparison_axes": ["보장 항목", "지급 조건", "제한/면책", "사용자 적합성"],
+        }
+    # explain / define_term fallback
+    sections = []
+    for section in state.get("guarded_sections", []) or []:
+        evidence = (section.get("evidence") or [])[:MAX_SECTION_EVIDENCE]
+        compact = []
+        for item in evidence:
+            if isinstance(item, dict):
+                copied = dict(item)
+                for key in ["text", "condition", "condition_detail", "content", "definition"]:
+                    if key in copied:
+                        copied[key] = _compact_text(str(copied.get(key) or ""), 180)
+                compact.append(copied)
+        sections.append({
+            "title": section.get("title"),
+            "task_type": section.get("task_type"),
+            "instruction": section.get("instruction"),
+            "summary": section.get("summary"),
+            "status": section.get("status"),
+            "evidence": compact,
+        })
+    return {"intent": intent, "sections": sections}
+
+
 async def node_analyzer(state: AgentState) -> Dict[str, Any]:
-    """Interpret the user question into intent, task candidates, and filters."""
     started = time.perf_counter()
     logger.info("analyzer started", extra={"request_id": _req(state), "question": state["question"]})
-
     payload: Dict[str, Any] = {
         "intent": "chit_chat",
         "task_candidates": ["CHIT_CHAT"],
@@ -546,7 +694,6 @@ async def node_analyzer(state: AgentState) -> Dict[str, Any]:
         "user_filters": {},
         "notes": [],
     }
-
     try:
         res = await (ANALYZER_PROMPT | llm).ainvoke({"question": state["question"]})
         clean_json = remove_think_tag(res.content).replace("```json", "").replace("```", "").strip()
@@ -574,7 +721,7 @@ async def node_analyzer(state: AgentState) -> Dict[str, Any]:
         task_candidates = _normalize_tasks(task_candidates + ["GET_BENEFIT", "GET_CONDITION", "GET_EXCLUSION", "RECOMMEND_PLANS"])
         required_tasks = _normalize_tasks(required_tasks + ["GET_BENEFIT", "GET_EXCLUSION", "RECOMMEND_PLANS"])
         intent = "recommend"
-    elif intent == "compare" or _is_compare_question(question):
+    elif intent == "compare" or any(token in question for token in ["비교", "차이", "더 나은"]):
         task_candidates = _normalize_tasks(task_candidates + ["GET_BENEFIT", "GET_CONDITION", "GET_EXCLUSION", "COMPARE_PLANS"])
         required_tasks = _normalize_tasks(required_tasks + ["GET_BENEFIT", "GET_EXCLUSION", "COMPARE_PLANS"])
         intent = "compare"
@@ -594,20 +741,12 @@ async def node_analyzer(state: AgentState) -> Dict[str, Any]:
         tasks = [t for t in ordered if t in tasks]
 
     duration_ms = _ms(started)
-    logger.info(
-        "analyzer finished",
-        extra={
-            "request_id": _req(state),
-            "intent": intent,
-            "tasks": tasks,
-            "task_candidates": task_candidates,
-            "required_tasks": required_tasks,
-            "concept_keywords": concept_keywords,
-            "product_keywords": product_keywords,
-            "user_filters": user_filters,
-            "duration_ms": duration_ms,
-        },
-    )
+    logger.info("analyzer finished", extra={
+        "request_id": _req(state), "intent": intent, "tasks": tasks,
+        "task_candidates": task_candidates, "required_tasks": required_tasks,
+        "concept_keywords": concept_keywords, "product_keywords": product_keywords,
+        "user_filters": user_filters, "duration_ms": duration_ms,
+    })
     return {
         "intent": intent,
         "tasks": tasks,
@@ -622,7 +761,6 @@ async def node_analyzer(state: AgentState) -> Dict[str, Any]:
 
 
 async def node_grounder(state: AgentState) -> Dict[str, Any]:
-    """Resolve user concept keywords into known concept nodes."""
     started = time.perf_counter()
     keywords = list(dict.fromkeys(state.get("concept_keywords", []) or []))
     logger.info("grounder started", extra={"request_id": _req(state), "keywords": keywords, "keyword_count": len(keywords)})
@@ -653,15 +791,12 @@ async def node_grounder(state: AgentState) -> Dict[str, Any]:
                 resolved_concepts.append(item)
 
     duration_ms = _ms(started)
-    logger.info(
-        "grounder finished",
-        extra={
-            "request_id": _req(state),
-            "resolved_concept_ids": [x.get("concept_id") for x in resolved_concepts],
-            "resolved_count": len(resolved_concepts),
-            "duration_ms": duration_ms,
-        },
-    )
+    logger.info("grounder finished", extra={
+        "request_id": _req(state),
+        "resolved_concept_ids": [x.get("concept_id") for x in resolved_concepts],
+        "resolved_count": len(resolved_concepts),
+        "duration_ms": duration_ms,
+    })
     return {
         "resolved_concepts": resolved_concepts,
         "trace_log": update_trace(state, "Grounder", f"resolved={len(resolved_concepts)} concepts, duration_ms={duration_ms}"),
@@ -669,85 +804,102 @@ async def node_grounder(state: AgentState) -> Dict[str, Any]:
 
 
 async def node_planner(state: AgentState) -> Dict[str, Any]:
-    """Transform analyzer output into an ordered execution plan."""
     started = time.perf_counter()
     tasks = _normalize_tasks(state.get("tasks", []))
     resolved_concepts = state.get("resolved_concepts", []) or []
     product_keywords = state.get("product_keywords", []) or []
     concept_keywords = state.get("concept_keywords", []) or []
     intent = state.get("intent", _derive_intent_from_tasks(tasks, state.get("question", "")))
-
     plan: List[Dict[str, Any]] = []
     if tasks == ["CHIT_CHAT"]:
-        plan = [{
-            "task_id": "task_1",
-            "task_type": "CHIT_CHAT",
-            "title": TASK_TITLES["CHIT_CHAT"],
-            "inputs": {},
-            "depends_on": [],
-            "priority": 1,
-        }]
+        plan = [{"task_id": "task_1", "task_type": "CHIT_CHAT", "title": TASK_TITLES["CHIT_CHAT"], "inputs": {}, "depends_on": [], "priority": 1}]
     else:
         for idx, task_type in enumerate(tasks, start=1):
             inputs: Dict[str, Any] = {
                 "concept_id": resolved_concepts[0].get("concept_id") if resolved_concepts else None,
+                "concept_ids": [x.get("concept_id") for x in resolved_concepts if x.get("concept_id")],
                 "product_keywords": product_keywords,
                 "user_filters": state.get("user_filters", {}),
                 "intent": intent,
+                "retrieval_limit": INITIAL_RETRIEVAL_LIMIT,
+                "final_candidate_limit": FINAL_CANDIDATE_LIMIT,
+                "answer_top_n": _parse_requested_answer_count(state.get("question", ""), intent),
             }
             if task_type == "DEFINE_TERM":
-                inputs.update({
-                    "keyword": concept_keywords[0] if concept_keywords else "",
-                })
-            plan.append(
-                {
-                    "task_id": f"task_{idx}",
-                    "task_type": task_type,
-                    "title": TASK_TITLES.get(task_type, task_type),
-                    "inputs": inputs,
-                    "depends_on": ["grounding"] if task_type not in {"CHIT_CHAT", "DEFINE_TERM"} else [],
-                    "priority": idx,
-                }
-            )
-
+                inputs["keyword"] = concept_keywords[0] if concept_keywords else ""
+            plan.append({
+                "task_id": f"task_{idx}",
+                "task_type": task_type,
+                "title": TASK_TITLES.get(task_type, task_type),
+                "inputs": inputs,
+                "depends_on": ["grounding"] if task_type not in {"CHIT_CHAT", "DEFINE_TERM"} else [],
+                "priority": idx,
+            })
     duration_ms = _ms(started)
-    logger.info(
-        "planner finished",
-        extra={
-            "request_id": _req(state),
-            "intent": intent,
-            "task_plan": plan,
-            "task_count": len(plan),
-            "duration_ms": duration_ms,
-        },
-    )
-    return {
-        "task_plan": plan,
-        "trace_log": update_trace(state, "Planner", f"planned={len(plan)} tasks, duration_ms={duration_ms}"),
-    }
+    logger.info("planner finished", extra={"request_id": _req(state), "intent": intent, "task_plan": plan, "task_count": len(plan), "duration_ms": duration_ms})
+    return {"task_plan": plan, "trace_log": update_trace(state, "Planner", f"planned={len(plan)} tasks, duration_ms={duration_ms}")}
+
+
+def _benefit_evidence_from_catalog(catalog: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    items = []
+    for candidate in catalog:
+        for benefit in (candidate.get("benefits") or [])[:MAX_EVIDENCE_PER_CANDIDATE]:
+            items.append({
+                "company": candidate.get("company"),
+                "product_name": candidate.get("product_name"),
+                "rider_name": candidate.get("rider_name"),
+                "benefit_name": benefit.get("benefit_name"),
+                "amount": benefit.get("amount_text"),
+                "condition": benefit.get("condition_summary"),
+            })
+    return items
+
+
+def _condition_evidence_from_catalog(catalog: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    items = []
+    for candidate in catalog:
+        for benefit in (candidate.get("benefits") or [])[:MAX_EVIDENCE_PER_CANDIDATE]:
+            condition = benefit.get("condition_summary") or ""
+            if condition:
+                items.append({
+                    "company": candidate.get("company"),
+                    "product_name": candidate.get("product_name"),
+                    "rider_name": candidate.get("rider_name"),
+                    "benefit_name": benefit.get("benefit_name"),
+                    "condition_type": _classify_condition_type(condition),
+                    "condition_detail": condition,
+                })
+    return items
+
+
+def _exclusion_evidence_from_catalog(catalog: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    items = []
+    for candidate in catalog:
+        for clause in (candidate.get("clauses") or []):
+            if clause.get("relation_type") == "RESTRICTS" or clause.get("tag") in {"EXCLUSION", "LIMIT", "RESTRICTION"}:
+                items.append({
+                    "company": candidate.get("company"),
+                    "product_name": candidate.get("product_name"),
+                    "rider_name": candidate.get("rider_name"),
+                    "clause_title": clause.get("title"),
+                    "exclusion_type": _classify_exclusion_type(clause.get("content", ""), clause.get("title", "")),
+                    "text": clause.get("content"),
+                    "relation_type": clause.get("relation_type"),
+                })
+    return items
 
 
 async def _execute_task(plan_item: Dict[str, Any], state: AgentState) -> Dict[str, Any]:
-    """Execute a single retrieval or scoring task and normalize its result shape."""
     started = time.perf_counter()
     task_type = plan_item["task_type"]
     inputs = plan_item.get("inputs", {})
     resolved_concepts = state.get("resolved_concepts", []) or []
     logger.info("executor task started", extra={"request_id": _req(state), "task_type": task_type, "inputs": inputs})
-
     result: Dict[str, Any] = {
-        "task_id": plan_item["task_id"],
-        "task_type": task_type,
-        "title": plan_item["title"],
-        "status": "success",
-        "resolved_concepts": resolved_concepts,
-        "evidence": [],
-        "summary": "",
-        "error": None,
-        "duration_ms": None,
-        "evidence_count": 0,
+        "task_id": plan_item["task_id"], "task_type": task_type, "title": plan_item["title"],
+        "status": "success", "resolved_concepts": resolved_concepts, "evidence": [], "summary": "",
+        "error": None, "duration_ms": None, "evidence_count": 0,
     }
-
     try:
         if task_type == "DEFINE_TERM":
             keyword = inputs.get("keyword") or (state.get("concept_keywords") or [""])[0]
@@ -758,160 +910,107 @@ async def _execute_task(plan_item: Dict[str, Any], state: AgentState) -> Dict[st
             else:
                 result["status"] = "no_evidence"
                 result["summary"] = "용어 정의를 찾지 못함"
-
         elif task_type == "GET_BENEFIT":
             concept_id = inputs.get("concept_id")
             if concept_id:
                 res = await retrieve_benefit(concept_id)
             else:
-                catalog = await retrieve_plan_catalog(concept_id=None, product_keywords=inputs.get("product_keywords"), limit=12)
-                res = [
-                    {
-                        "company": item.get("company"),
-                        "product_name": item.get("product_name"),
-                        "rider_name": item.get("rider_name"),
-                        "benefit_name": (item.get("benefits") or [{}])[0].get("benefit_name"),
-                        "amount": (item.get("benefits") or [{}])[0].get("amount_text"),
-                        "condition": (item.get("benefits") or [{}])[0].get("condition_summary"),
-                    }
-                    for item in catalog
-                ]
-            result["evidence"] = res
+                catalog = await retrieve_plan_catalog(concept_id=None, product_keywords=inputs.get("product_keywords"), limit=inputs.get("retrieval_limit", INITIAL_RETRIEVAL_LIMIT))
+                res = _benefit_evidence_from_catalog(catalog)
+            result["evidence"] = res[:MAX_SECTION_EVIDENCE * 2]
             result["status"] = "success" if res else "no_evidence"
             result["summary"] = f"보장 정보 {len(res)}건 확보"
-
         elif task_type == "GET_CONDITION":
             concept_id = inputs.get("concept_id")
             if concept_id:
                 res = await retrieve_condition(concept_id)
             else:
-                catalog = await retrieve_plan_catalog(concept_id=None, product_keywords=inputs.get("product_keywords"), limit=12)
-                res = [
-                    {
-                        "company": item.get("company"),
-                        "product_name": item.get("product_name"),
-                        "rider_name": item.get("rider_name"),
-                        "benefit": (item.get("benefits") or [{}])[0].get("benefit_name"),
-                        "condition_detail": (item.get("benefits") or [{}])[0].get("condition_summary"),
-                    }
-                    for item in catalog
-                ]
-            result["evidence"] = res
+                catalog = await retrieve_plan_catalog(concept_id=None, product_keywords=inputs.get("product_keywords"), limit=inputs.get("retrieval_limit", INITIAL_RETRIEVAL_LIMIT))
+                res = _condition_evidence_from_catalog(catalog)
+            result["evidence"] = res[:MAX_SECTION_EVIDENCE * 2]
             result["status"] = "success" if res else "no_evidence"
             result["summary"] = f"지급 조건 {len(res)}건 확보"
-
         elif task_type == "GET_EXCLUSION":
             concept_id = inputs.get("concept_id")
             if concept_id:
                 res = await retrieve_exclusion(concept_id)
             else:
-                catalog = await retrieve_plan_catalog(concept_id=None, product_keywords=inputs.get("product_keywords"), limit=12)
-                res = []
-                for item in catalog:
-                    for clause in item.get("clauses") or []:
-                        if clause.get("relation_type") == "RESTRICTS" or clause.get("tag") in {"EXCLUSION", "LIMIT", "RESTRICTION"}:
-                            res.append({
-                                "company": item.get("company"),
-                                "product_name": item.get("product_name"),
-                                "rider_name": item.get("rider_name"),
-                                "text": clause.get("content"),
-                                "clause_title": clause.get("title"),
-                                "relation_type": clause.get("relation_type"),
-                            })
-            result["evidence"] = res
+                catalog = await retrieve_plan_catalog(concept_id=None, product_keywords=inputs.get("product_keywords"), limit=inputs.get("retrieval_limit", INITIAL_RETRIEVAL_LIMIT))
+                res = _exclusion_evidence_from_catalog(catalog)
+            result["evidence"] = res[:MAX_SECTION_EVIDENCE * 3]
             result["status"] = "success" if res else "no_evidence"
             result["summary"] = f"면책/제한 {len(res)}건 확보"
-
         elif task_type in {"RECOMMEND_PLANS", "COMPARE_PLANS"}:
             concept_id = inputs.get("concept_id")
             product_keywords = inputs.get("product_keywords") or []
-            raw_candidates = await retrieve_plan_catalog(concept_id=concept_id, product_keywords=product_keywords, limit=12)
+            raw_candidates = await retrieve_plan_catalog(
+                concept_id=concept_id,
+                product_keywords=product_keywords,
+                limit=inputs.get("retrieval_limit", INITIAL_RETRIEVAL_LIMIT),
+            )
             scored_candidates = _score_plan_candidates(raw_candidates, inputs.get("user_filters", {}), state.get("question", ""))
+            final_limit = inputs.get("final_candidate_limit", FINAL_CANDIDATE_LIMIT)
             if task_type == "COMPARE_PLANS":
-                selected = scored_candidates[:6]
-                evidence = [_candidate_to_evidence(x) for x in selected]
+                selected = scored_candidates[:final_limit]
                 status = "success" if len(selected) >= 2 else "no_evidence"
                 summary = f"비교 후보 {len(selected)}건 확보"
             else:
-                selected = [x for x in scored_candidates if x.get("is_eligible")][:6] or scored_candidates[:6]
-                evidence = [_candidate_to_evidence(x) for x in selected]
+                selected = [x for x in scored_candidates if x.get("is_eligible")][:final_limit] or scored_candidates[:final_limit]
                 status = "success" if selected else "no_evidence"
                 summary = f"추천 후보 {len(selected)}건 확보"
-            result["evidence"] = evidence
-            result["status"] = status
-            result["summary"] = summary
-            result["score_breakdown"] = [x.get("score_breakdown") for x in selected]
-            result["raw_candidates"] = scored_candidates[:6]
-
+            evidence = [_compact_candidate_for_answer(x) for x in selected]
+            result.update({
+                "evidence": evidence,
+                "status": status,
+                "summary": summary,
+                "raw_candidates": selected,
+            })
         elif task_type == "CHIT_CHAT":
-            result["summary"] = "일반 대화 - retrieval 생략"
-
+            result["status"] = "success"
+            result["summary"] = "일반 대화"
+        else:
+            result["status"] = "error"
+            result["summary"] = f"알 수 없는 task: {task_type}"
+            result["error"] = "unknown_task"
     except Exception as exc:
         logger.exception("executor task failed", extra={"request_id": _req(state), "task_type": task_type})
         result["status"] = "error"
+        result["summary"] = f"task error: {exc}"
         result["error"] = str(exc)
-        result["summary"] = f"task 실행 중 오류: {exc}"
-
     result["duration_ms"] = _ms(started)
     result["evidence_count"] = len(result.get("evidence", []))
-    logger.info(
-        "executor task finished",
-        extra={
-            "request_id": _req(state),
-            "task_type": task_type,
-            "status": result["status"],
-            "evidence_count": result["evidence_count"],
-            "duration_ms": result["duration_ms"],
-        },
-    )
+    logger.info("executor task finished", extra={
+        "request_id": _req(state), "task_type": task_type, "status": result["status"],
+        "evidence_count": result["evidence_count"], "duration_ms": result["duration_ms"],
+    })
     return result
 
 
 async def node_executor(state: AgentState) -> Dict[str, Any]:
-    """Run planned tasks, mostly in parallel, and collect normalized outputs."""
     started = time.perf_counter()
     task_plan = state.get("task_plan", []) or []
     if not task_plan:
         return {"task_results": [], "trace_log": update_trace(state, "Executor", "planned tasks not found")}
-
     runnable = [item for item in task_plan if item["task_type"] != "CHIT_CHAT"]
     results: List[Dict[str, Any]] = []
-
     if runnable:
         gathered = await asyncio.gather(*[_execute_task(item, state) for item in runnable], return_exceptions=True)
         for item, output in zip(runnable, gathered):
             if isinstance(output, Exception):
                 logger.exception("executor task crashed", extra={"request_id": _req(state), "task_type": item["task_type"]})
-                results.append(
-                    {
-                        "task_id": item["task_id"],
-                        "task_type": item["task_type"],
-                        "title": item["title"],
-                        "status": "error",
-                        "resolved_concepts": state.get("resolved_concepts", []),
-                        "evidence": [],
-                        "summary": f"task crash: {output}",
-                        "error": str(output),
-                    }
-                )
+                results.append({
+                    "task_id": item["task_id"], "task_type": item["task_type"], "title": item["title"],
+                    "status": "error", "resolved_concepts": state.get("resolved_concepts", []),
+                    "evidence": [], "summary": f"task crash: {output}", "error": str(output),
+                })
             else:
                 results.append(output)
     else:
-        results.append(
-            {
-                "task_id": "task_1",
-                "task_type": "CHIT_CHAT",
-                "title": TASK_TITLES["CHIT_CHAT"],
-                "status": "success",
-                "resolved_concepts": [],
-                "evidence": [],
-                "summary": "일반 대화 - retrieval 생략",
-                "error": None,
-                "duration_ms": 0,
-                "evidence_count": 0,
-            }
-        )
-
+        results.append({
+            "task_id": "task_1", "task_type": "CHIT_CHAT", "title": TASK_TITLES["CHIT_CHAT"],
+            "status": "success", "resolved_concepts": [], "evidence": [], "summary": "일반 대화 - retrieval 생략",
+            "error": None, "duration_ms": 0, "evidence_count": 0,
+        })
     plan_candidates: List[Dict[str, Any]] = []
     for item in results:
         if item.get("task_type") in {"RECOMMEND_PLANS", "COMPARE_PLANS"}:
@@ -921,8 +1020,7 @@ async def node_executor(state: AgentState) -> Dict[str, Any]:
         key = _build_candidate_key(candidate)
         if key not in dedup or candidate.get("score_breakdown", {}).get("final_score", 0) > dedup[key].get("score_breakdown", {}).get("final_score", 0):
             dedup[key] = candidate
-    plan_candidates = sorted(dedup.values(), key=lambda x: x.get("score_breakdown", {}).get("final_score", 0), reverse=True)[:6]
-
+    plan_candidates = sorted(dedup.values(), key=lambda x: x.get("score_breakdown", {}).get("final_score", 0), reverse=True)[:FINAL_CANDIDATE_LIMIT]
     duration_ms = _ms(started)
     logger.info("executor finished", extra={"request_id": _req(state), "task_result_count": len(results), "plan_candidate_count": len(plan_candidates), "duration_ms": duration_ms})
     return {
@@ -933,28 +1031,23 @@ async def node_executor(state: AgentState) -> Dict[str, Any]:
 
 
 async def node_composer(state: AgentState) -> Dict[str, Any]:
-    """Turn task outputs into response sections for final answer generation."""
     started = time.perf_counter()
     task_results = state.get("task_results", []) or []
     sections: List[Dict[str, Any]] = []
-
     for item in task_results:
         if item["task_type"] == "CHIT_CHAT":
             continue
-        sections.append(
-            {
-                "title": item["title"],
-                "task_id": item["task_id"],
-                "task_type": item["task_type"],
-                "instruction": SECTION_INSTRUCTIONS.get(item["task_type"], "근거 중심으로 설명하세요."),
-                "status": item["status"],
-                "summary": item.get("summary", ""),
-                "evidence": item.get("evidence", []),
-                "evidence_count": item.get("evidence_count", len(item.get("evidence", []))),
-                "duration_ms": item.get("duration_ms"),
-            }
-        )
-
+        sections.append({
+            "title": item["title"],
+            "task_id": item["task_id"],
+            "task_type": item["task_type"],
+            "instruction": SECTION_INSTRUCTIONS.get(item["task_type"], "근거 중심으로 설명하세요."),
+            "status": item["status"],
+            "summary": item.get("summary", ""),
+            "evidence": item.get("evidence", []),
+            "evidence_count": item.get("evidence_count", len(item.get("evidence", []))),
+            "duration_ms": item.get("duration_ms"),
+        })
     duration_ms = _ms(started)
     logger.info("composer finished", extra={"request_id": _req(state), "section_count": len(sections), "duration_ms": duration_ms})
     return {
@@ -964,16 +1057,13 @@ async def node_composer(state: AgentState) -> Dict[str, Any]:
 
 
 async def node_guard(state: AgentState) -> Dict[str, Any]:
-    """Apply a fast code-based evidence guard before answer generation."""
     started = time.perf_counter()
     sections = state.get("response_sections", []) or []
     guarded_sections: List[Dict[str, Any]] = []
-
     for section in sections:
         guarded = dict(section)
         evidence = guarded.get("evidence", []) or []
         needs_identity = _needs_product_rider(guarded.get("task_type", ""))
-
         if not evidence:
             guarded["guard_status"] = "no_evidence"
             guarded["guard_note"] = "검색된 근거가 없어 확정 답변을 생성하지 않음"
@@ -989,78 +1079,52 @@ async def node_guard(state: AgentState) -> Dict[str, Any]:
         else:
             guarded["guard_status"] = "passed"
             guarded["guard_note"] = "근거 검증 통과"
-
         guarded_sections.append(guarded)
-
-    allowed_entities = _flatten_allowed_entities(guarded_sections)
+    allowed_entities = _flatten_allowed_entities_from_candidates(state.get("plan_candidates", []) or [])
+    answer_skeleton = _build_answer_skeleton({**state, "guarded_sections": guarded_sections})
     duration_ms = _ms(started)
     logger.info("guard finished", extra={"request_id": _req(state), "section_count": len(guarded_sections), "allowed_entities": allowed_entities, "duration_ms": duration_ms})
     return {
         "guarded_sections": guarded_sections,
         "allowed_entities": allowed_entities,
+        "answer_skeleton": answer_skeleton,
         "trace_log": update_trace(state, "Guard", f"sections={len(guarded_sections)}, duration_ms={duration_ms}"),
     }
 
 
 async def node_generator(state: AgentState) -> Dict[str, Any]:
-    """Generate the final answer while staying inside guarded evidence."""
     started = time.perf_counter()
     task_types = state.get("tasks", []) or []
     question = state.get("question", "")
-
     if task_types == ["CHIT_CHAT"] and not _is_insurance_question(question):
         logger.info("generator started", extra={"request_id": _req(state), "mode": "chit_chat"})
         res = await llm.ainvoke(question)
-        return {
-            "final_answer": remove_think_tag(res.content),
-            "trace_log": update_trace(state, "Generator", f"chit-chat response, duration_ms={_ms(started)}"),
-        }
+        return {"final_answer": remove_think_tag(res.content), "trace_log": update_trace(state, "Generator", f"chit-chat response, duration_ms={_ms(started)}")}
 
-    sections = state.get("guarded_sections", []) or state.get("response_sections", []) or []
-    if not sections:
-        sections = [{
-            "title": "확인 결과",
-            "task_type": "NONE",
-            "instruction": "관련 근거 부족을 명시하세요.",
-            "status": "no_evidence",
-            "summary": "검색된 근거가 없습니다.",
-            "evidence": [],
-        }]
+    answer_skeleton = state.get("answer_skeleton") or _build_answer_skeleton(state)
+    if not answer_skeleton:
+        return {"final_answer": "현재 검색된 근거 내에서 확인 가능한 정보를 찾지 못했습니다.", "trace_log": update_trace(state, "Generator", f"grounded fallback, duration_ms={_ms(started)}")}
+    if state.get("intent") in {"recommend", "compare"} and not (answer_skeleton.get("candidates") or []):
+        return {"final_answer": "현재 검색된 근거 내에서 확인 가능한 상품/특약 후보를 찾지 못했습니다.", "trace_log": update_trace(state, "Generator", f"grounded fallback, duration_ms={_ms(started)}")}
 
-    non_empty_sections = [s for s in sections if s.get("status") != "no_evidence" and (s.get("evidence") or [])]
-    if not non_empty_sections and _is_insurance_question(question):
-        return {
-            "final_answer": "현재 검색된 근거 내에서 확인 가능한 상품/특약 정보를 찾지 못했습니다. 실제 검색 결과에 있는 회사명·상품명·특약명만 답변하도록 제한되어 있어, 근거가 확보되면 다시 추천 또는 비교할 수 있습니다.",
-            "trace_log": update_trace(state, "Generator", f"grounded fallback, duration_ms={_ms(started)}"),
-        }
-
-    payload_sections = json.dumps(sections, ensure_ascii=False, indent=2)
     payload_tasks = json.dumps(task_types, ensure_ascii=False)
     payload_entities = json.dumps(state.get("allowed_entities", {}), ensure_ascii=False)
-    logger.info("generator started", extra={"request_id": _req(state), "tasks": task_types, "section_count": len(sections)})
-
-    res = await (GENERATOR_PROMPT | llm).ainvoke(
-        {
-            "question": question,
-            "tasks": payload_tasks,
-            "allowed_entities": payload_entities,
-            "response_sections": payload_sections,
-        }
-    )
+    payload_skeleton = json.dumps(answer_skeleton, ensure_ascii=False, indent=2)
+    logger.info("generator started", extra={"request_id": _req(state), "tasks": task_types, "section_count": len((state.get('guarded_sections') or []))})
+    res = await (GENERATOR_PROMPT | llm).ainvoke({
+        "question": question,
+        "tasks": payload_tasks,
+        "allowed_entities": payload_entities,
+        "answer_skeleton": payload_skeleton,
+    })
     answer = remove_think_tag(res.content)
-
-    # Simple entity guard: if unknown company/product/rider slips in, fall back.
     allowed = state.get("allowed_entities", {}) or {}
     flattened_allowed = " ".join(allowed.get("companies", []) + allowed.get("products", []) + allowed.get("riders", []))
     for suspicious in ["삼성", "KB", "교보", "DB손해", "메리츠"]:
         if suspicious in answer and suspicious not in flattened_allowed:
             answer = "현재 검색된 근거 내에서 확인 가능한 회사·상품·특약만 답변하도록 제한되어 있습니다. 검색 결과에 없는 회사명이나 상품명은 제외하고 다시 확인해 주세요."
             break
-
-    return {
-        "final_answer": answer,
-        "trace_log": update_trace(state, "Generator", f"response generated, duration_ms={_ms(started)}"),
-    }
+    return {"final_answer": answer, "trace_log": update_trace(state, "Generator", f"response generated, duration_ms={_ms(started)}")}
 
 
 workflow = StateGraph(AgentState)
@@ -1071,7 +1135,6 @@ workflow.add_node("executor", node_executor)
 workflow.add_node("composer", node_composer)
 workflow.add_node("guard", node_guard)
 workflow.add_node("generator", node_generator)
-
 workflow.add_edge(START, "analyzer")
 workflow.add_edge("analyzer", "grounder")
 workflow.add_edge("grounder", "planner")
@@ -1080,5 +1143,4 @@ workflow.add_edge("executor", "composer")
 workflow.add_edge("composer", "guard")
 workflow.add_edge("guard", "generator")
 workflow.add_edge("generator", END)
-
 app_graph = workflow.compile()
