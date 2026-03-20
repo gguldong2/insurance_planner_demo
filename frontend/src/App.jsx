@@ -311,6 +311,29 @@ function PlanCandidateCard({ candidate, index }) {
   );
 }
 
+function SelectedCandidateCard({ candidate, index }) {
+  const scoringBasis = candidate?.scoring_basis || [];
+  return (
+    <div className="trace-log-card">
+      <div className="trace-log-title-row">
+        <div>
+          <div className="trace-log-title">#{index + 1} {candidate.company} / {candidate.product_name}</div>
+          <div className="trace-log-subtitle">{candidate.rider_name || '-'}{candidate.renewal_type ? ` · ${candidate.renewal_type}` : ''}</div>
+        </div>
+        <span className="trace-log-pill">selected</span>
+      </div>
+      {scoringBasis.length > 0 ? (
+        <div className="trace-chip-wrap mt-2">
+          {scoringBasis.map((item, basisIndex) => (
+            <span key={`${item.category}-${basisIndex}`} className="trace-chip">{item.category}</span>
+          ))}
+        </div>
+      ) : null}
+      <JsonPreview data={candidate} />
+    </div>
+  );
+}
+
 function TaskResultCard({ item }) {
   const evidence = item?.evidence || [];
   return (
@@ -357,6 +380,13 @@ function App() {
 
   const parsedLogs = useMemo(() => logs.map((log, index) => parseLog(log, index)), [logs]);
   const traceSummary = useMemo(() => summarizeLogs(parsedLogs), [parsedLogs]);
+  const selectedCandidates = useMemo(() => {
+    const grouped = debugData?.answer_skeleton?.grouped_candidates || [];
+    if (grouped.length > 0) {
+      return grouped.flatMap((group) => group.candidates || []);
+    }
+    return debugData?.answer_skeleton?.candidates || [];
+  }, [debugData]);
 
   const sendMessage = async () => {
     if (!input.trim() || isLoading) return;
@@ -563,6 +593,21 @@ function App() {
             ) : (
               <div className="trace-empty-box">task 결과 없음</div>
             )}
+          </div>
+
+          <div className="trace-section">
+            <div className="trace-section-title">Generator Input</div>
+            {selectedCandidates.length > 0 ? (
+              selectedCandidates.map((candidate, index) => (
+                <SelectedCandidateCard key={`${candidate.product_name}-${candidate.rider_name}-${index}`} candidate={candidate} index={index} />
+              ))
+            ) : (
+              <div className="trace-empty-box">generator에 전달된 후보 없음</div>
+            )}
+            <details className="trace-details-block" open>
+              <summary>answer_skeleton 보기</summary>
+              <JsonPreview data={debugData?.answer_skeleton || {}} />
+            </details>
           </div>
 
           <div className="trace-section">

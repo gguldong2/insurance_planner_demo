@@ -52,7 +52,7 @@ llm = ChatOpenAI(
 # Explicit limits for retrieval / final candidates / answer display.
 INITIAL_RETRIEVAL_LIMIT = 12
 FINAL_CANDIDATE_LIMIT = 6
-RECOMMEND_ANSWER_TOP_N = 3
+RECOMMEND_ANSWER_TOP_N = 6
 COMPARE_ANSWER_TOP_N = 2
 MAX_EVIDENCE_PER_CANDIDATE = 3
 MAX_SECTION_EVIDENCE = 6
@@ -181,38 +181,68 @@ few-shot 예시 2:
     ]
 )
 
-GENERATOR_PROMPT = ChatPromptTemplate.from_messages(
+RECOMMEND_GENERATOR_PROMPT = ChatPromptTemplate.from_messages(
     [
         (
             "system",
-            """당신은 보험 QA 어시스턴트다.
+            """당신은 보험 추천 답변 작성기다.
+최종 답변은 반드시 제공된 answer_skeleton, allowed_entities, user_filters만 사용해 작성하라.
+배경지식, 추측, 일반 상식으로 빈칸을 메우지 마라.
+
+강제 규칙:
+1. 회사명 / 상품명 / 특약명은 전달된 full name 그대로 사용하라. 축약, 생략, 재작성 금지.
+2. 추천 intent에서는 비교 섹션을 만들지 마라. "비교 대상", "후보 A", "후보 B" 같은 표현 금지.
+3. 답변 첫 부분에는 반드시 `## 추천 상품 요약표` 제목과, answer_skeleton.summary_table_rows를 그대로 사용한 markdown 표를 작성하라.
+4. 표의 컬럼 순서는 `순위 | 특약명 | 핵심 보장 | 지급 조건 요약 | 제한/면책`으로 유지하라. 특약명 셀 안에는 특약명 다음 줄에 `(회사명 / 상품명)`을 그대로 넣어라.
+5. 표 아래 상세 설명은 회사명 / 상품명 단위로 묶고, 그 아래에 `A. 특약명 (N위)` 형태로 정리하라.
+6. 각 특약 상세 설명에서는 값이 있는 항목만 작성하라. `a. 추천 이유`는 항상 작성하되, `b. 확인된 보장`, `c. 지급 조건`, `d. 제한/면책`은 해당 값이 있을 때만 작성하라.
+7. benefits가 하나라도 있으면 `정보가 제공되지 않았습니다` 같은 문장을 쓰지 마라. conditions나 exclusions도 값이 있으면 마찬가지다.
+8. 추천 이유는 점수 숫자 대신, 전달된 recommend_reasons와 score_breakdown 근거를 자연어로 설명하라.
+9. 질문 조건(user_filters)은 실제 근거와 연결될 때만 언급하라.
+   - age는 지급 조건/가입 조건/보장 조건에 연령 관련 근거가 있을 때만 언급
+   - gender는 성별 관련 근거가 있을 때만 언급
+   - disease_history는 기존 진단/병력/보장개시일 이전 진단 관련 제한·면책 근거가 있을 때만 언급
+   - 근거가 없으면 질문 조건을 억지로 추천 이유에 넣지 마라.
+10. condition은 지급조건/가입조건/유지조건으로, exclusion은 면책/횟수제한/금액제한/특정질환 제외로 구분해 설명하라.
+11. 면책/제한 내용은 특약 단위 설명에 포함하라. 특약 추천이면 관련 조건과 제한/면책은 함께 제시하는 방향으로 작성하라.
+""",
+        ),
+        (
+            "user",
+            """[질문]
+{question}
+
+[사용자 필터]
+{user_filters}
+
+[실행된 task]
+{tasks}
+
+[허용 엔티티]
+{allowed_entities}
+
+[답변 뼈대]
+{answer_skeleton}
+
+위 정보를 바탕으로 한국어 markdown 답변을 작성하라.
+""",
+        ),
+    ]
+)
+
+COMPARE_GENERATOR_PROMPT = ChatPromptTemplate.from_messages(
+    [
+        (
+            "system",
+            """당신은 보험 비교 답변 작성기다.
 최종 답변은 반드시 제공된 answer_skeleton과 allowed_entities만 사용해 작성하라.
 배경지식, 추측, 일반 상식으로 빈칸을 메우지 마라.
 
 강제 규칙:
 1. 회사명 / 상품명 / 특약명은 전달된 full name 그대로 사용하라. 축약, 생략, 재작성 금지.
-2. 추천/비교는 후보별 섹션을 유지하라. pooled 서술 금지.
-3. 추천 답변에서는 각 후보별로 추천 이유, 보장 항목, 지급 조건, 제한/면책, 유의사항을 적어라.
-4. 비교 답변에서는 각 후보별로 보장 항목, 지급 조건, 제한/면책, 사용자 적합성을 고정 축으로 비교하라.
-5. condition은 지급조건/가입조건/유지조건으로, exclusion은 면책/횟수제한/금액제한/특정질환 제외로 구분해 설명하라.
-6. 숫자 점수 자체는 답변에 그대로 쓰지 말고, 점수의 근거 텍스트를 자연어로 설명하라.
-7. 근거가 부족한 항목은 '확인된 근거가 부족하다'고 명시하라.
-
-recommend 템플릿 예시:
-- 보험사 / 상품명 / 특약명
-  - 추천 이유:
-  - 보장 항목:
-  - 지급 조건:
-  - 제한/면책:
-  - 유의사항:
-
-compare 템플릿 예시:
-- 후보 A: 보험사 / 상품명 / 특약명
-- 후보 B: 보험사 / 상품명 / 특약명
-- 보장 항목 비교
-- 지급 조건 비교
-- 제한/면책 비교
-- 사용자 적합성 비교
+2. 비교 답변은 answer_skeleton의 comparison_axes 기준으로만 정리하라.
+3. 추천, 순위, 추천 상품 요약표 같은 표현은 쓰지 마라.
+4. 값이 없는 항목은 생략하되, 비교가 불완전한 경우에만 `확인 가능한 근거 범위에서만 비교함` 정도로 짧게 덧붙여라.
 """,
         ),
         (
@@ -229,7 +259,37 @@ compare 템플릿 예시:
 [답변 뼈대]
 {answer_skeleton}
 
-위 정보를 바탕으로 한국어로 답하라.
+위 정보를 바탕으로 한국어 markdown 답변을 작성하라.
+""",
+        ),
+    ]
+)
+
+DEFAULT_GENERATOR_PROMPT = ChatPromptTemplate.from_messages(
+    [
+        (
+            "system",
+            """당신은 보험 QA 답변 작성기다.
+최종 답변은 반드시 제공된 answer_skeleton과 allowed_entities만 사용해 작성하라.
+배경지식, 추측, 일반 상식으로 빈칸을 메우지 마라.
+회사명 / 상품명 / 특약명은 전달된 full name 그대로 사용하라.
+""",
+        ),
+        (
+            "user",
+            """[질문]
+{question}
+
+[실행된 task]
+{tasks}
+
+[허용 엔티티]
+{allowed_entities}
+
+[답변 뼈대]
+{answer_skeleton}
+
+위 정보를 바탕으로 한국어 markdown 답변을 작성하라.
 """,
         ),
     ]
@@ -591,6 +651,44 @@ def _compact_text(text: str, limit: int = 220) -> str:
     return text if len(text) <= limit else text[:limit].rstrip() + "…"
 
 
+def _first_nonempty(items: List[str]) -> str:
+    for item in items or []:
+        if (item or "").strip():
+            return item.strip()
+    return ""
+
+
+def _summarize_benefit_row(benefits: List[Dict[str, Any]]) -> str:
+    if not benefits:
+        return "-"
+    parts = []
+    for benefit in benefits[:2]:
+        name = (benefit.get("benefit_name") or "").strip()
+        amount = (benefit.get("amount_text") or "").strip()
+        chunk = f"{name} {amount}".strip()
+        if chunk:
+            parts.append(chunk)
+    return " / ".join(parts) if parts else "-"
+
+
+def _summarize_condition_row(conditions: List[Dict[str, Any]]) -> str:
+    first = conditions[0] if conditions else {}
+    summary = (first.get("condition_summary") or "").strip()
+    if not summary:
+        return "-"
+    label = (first.get("condition_type") or "").strip()
+    return _compact_text(f"{label}: {summary}" if label else summary, 90)
+
+
+def _summarize_exclusion_row(exclusions: List[Dict[str, Any]]) -> str:
+    first = exclusions[0] if exclusions else {}
+    content = (first.get("content") or "").strip()
+    if not content:
+        return "-"
+    label = (first.get("exclusion_type") or "").strip()
+    return _compact_text(f"{label}: {content}" if label else content, 90)
+
+
 def _compact_candidate_for_answer(candidate: Dict[str, Any]) -> Dict[str, Any]:
     prepared = _prepare_candidate(candidate)
     benefits = []
@@ -622,10 +720,20 @@ def _compact_candidate_for_answer(candidate: Dict[str, Any]) -> Dict[str, Any]:
         "benefits": benefits,
         "conditions": conditions,
         "exclusions": exclusions,
+        "general_clauses": [
+            {
+                "title": clause.get("title"),
+                "content": _compact_text(clause.get("content", ""), 180),
+            }
+            for clause in prepared.get("own_general_clauses", [])[:MAX_EVIDENCE_PER_CANDIDATE]
+        ],
         "recommend_reasons": prepared.get("recommend_reasons", []),
         "cautions": prepared.get("cautions", []),
         "score_breakdown": prepared.get("score_breakdown", {}),
         "is_eligible": prepared.get("is_eligible"),
+        "summary_core_benefit": _summarize_benefit_row(benefits),
+        "summary_condition": _summarize_condition_row(conditions),
+        "summary_exclusion": _summarize_exclusion_row(exclusions),
     }
 
 
@@ -638,18 +746,45 @@ def _build_answer_skeleton(state: AgentState) -> Dict[str, Any]:
     selected_compact = [_compact_candidate_for_answer(c) for c in selected]
 
     if intent == "recommend":
+        summary_table_rows = []
+        grouped_details: List[Dict[str, Any]] = []
+        grouped_map: Dict[str, Dict[str, Any]] = {}
+        for idx, candidate in enumerate(selected_compact, start=1):
+            company = candidate.get("company") or "-"
+            product_name = candidate.get("product_name") or "-"
+            rider_name = candidate.get("rider_name") or "-"
+            summary_table_rows.append({
+                "rank": idx,
+                "rider_name": rider_name,
+                "company": company,
+                "product_name": product_name,
+                "display_name": f"{rider_name}\n({company} / {product_name})",
+                "core_benefit": candidate.get("summary_core_benefit") or "-",
+                "condition_summary": candidate.get("summary_condition") or "-",
+                "exclusion_summary": candidate.get("summary_exclusion") or "-",
+            })
+            group_key = f"{company}::{product_name}"
+            if group_key not in grouped_map:
+                grouped_map[group_key] = {
+                    "company": company,
+                    "product_name": product_name,
+                    "items": [],
+                }
+                grouped_details.append(grouped_map[group_key])
+            alpha = chr(64 + len(grouped_map[group_key]["items"]) + 1)
+            grouped_map[group_key]["items"].append({
+                **candidate,
+                "rank": idx,
+                "alpha": alpha,
+            })
         return {
             "intent": "recommend",
             "answer_top_n": answer_top_n,
+            "summary_table_title": "추천 상품 요약표",
+            "summary_table_columns": ["순위", "특약명", "핵심 보장", "지급 조건 요약", "제한/면책"],
+            "summary_table_rows": summary_table_rows,
+            "grouped_details": grouped_details,
             "candidates": selected_compact,
-            "output_order": [
-                "보험사 / 상품명 / 특약명",
-                "추천 이유",
-                "보장 항목",
-                "지급 조건",
-                "제한/면책",
-                "유의사항",
-            ],
         }
     if intent == "compare":
         compare_candidates = selected_compact[: max(COMPARE_ANSWER_TOP_N, answer_top_n)]
@@ -659,7 +794,6 @@ def _build_answer_skeleton(state: AgentState) -> Dict[str, Any]:
             "candidates": compare_candidates,
             "comparison_axes": ["보장 항목", "지급 조건", "제한/면책", "사용자 적합성"],
         }
-    # explain / define_term fallback
     sections = []
     for section in state.get("guarded_sections", []) or []:
         evidence = (section.get("evidence") or [])[:MAX_SECTION_EVIDENCE]
@@ -1110,20 +1244,38 @@ async def node_generator(state: AgentState) -> Dict[str, Any]:
     payload_tasks = json.dumps(task_types, ensure_ascii=False)
     payload_entities = json.dumps(state.get("allowed_entities", {}), ensure_ascii=False)
     payload_skeleton = json.dumps(answer_skeleton, ensure_ascii=False, indent=2)
-    logger.info("generator started", extra={"request_id": _req(state), "tasks": task_types, "section_count": len((state.get('guarded_sections') or []))})
-    res = await (GENERATOR_PROMPT | llm).ainvoke({
+    payload_user_filters = json.dumps(state.get("user_filters", {}), ensure_ascii=False)
+    logger.info("generator started", extra={"request_id": _req(state), "tasks": task_types, "section_count": len((state.get('guarded_sections') or [])), "intent": state.get("intent")})
+    intent = state.get("intent")
+    if intent == "recommend":
+        prompt = RECOMMEND_GENERATOR_PROMPT
+    elif intent == "compare":
+        prompt = COMPARE_GENERATOR_PROMPT
+    else:
+        prompt = DEFAULT_GENERATOR_PROMPT
+    res = await (prompt | llm).ainvoke({
         "question": question,
         "tasks": payload_tasks,
         "allowed_entities": payload_entities,
         "answer_skeleton": payload_skeleton,
+        "user_filters": payload_user_filters,
     })
     answer = remove_think_tag(res.content)
+    if intent == "recommend":
+        answer = re.sub(r"\n?#+?\s*비교 대상.*", "", answer, flags=re.DOTALL).strip()
     allowed = state.get("allowed_entities", {}) or {}
     flattened_allowed = " ".join(allowed.get("companies", []) + allowed.get("products", []) + allowed.get("riders", []))
     for suspicious in ["삼성", "KB", "교보", "DB손해", "메리츠"]:
         if suspicious in answer and suspicious not in flattened_allowed:
             answer = "현재 검색된 근거 내에서 확인 가능한 회사·상품·특약만 답변하도록 제한되어 있습니다. 검색 결과에 없는 회사명이나 상품명은 제외하고 다시 확인해 주세요."
             break
+    if intent == "recommend" and answer_skeleton.get("summary_table_rows") and "추천 상품 요약표" not in answer:
+        rows = answer_skeleton.get("summary_table_rows", [])
+        lines = ["## 추천 상품 요약표", "| 순위 | 특약명 | 핵심 보장 | 지급 조건 요약 | 제한/면책 |", "|---|---|---|---|---|"]
+        for row in rows:
+            name = str(row.get("display_name", "-")).replace("\n", "<br>")
+            lines.append(f"| {row.get('rank','-')} | {name} | {row.get('core_benefit','-')} | {row.get('condition_summary','-')} | {row.get('exclusion_summary','-')} |")
+        answer = "\n".join(lines) + "\n\n" + answer
     return {"final_answer": answer, "trace_log": update_trace(state, "Generator", f"response generated, duration_ms={_ms(started)}")}
 
 
