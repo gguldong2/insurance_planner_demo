@@ -568,6 +568,29 @@ def _score_plan_candidates(candidates: List[Dict[str, Any]], user_filters: Dict[
             reason_codes.append("EXCLUSION_PRESENT")
         if user_filter_match >= 70:
             reason_codes.append("USER_FIT_HIGH")
+        logger.info(
+            "recommend candidate scoring",
+            extra={
+                "company": candidate.get("company"),
+                "product_name": candidate.get("product_name"),
+                "rider_name": candidate.get("rider_name"),
+                "benefit_count": len(candidate.get("benefits") or []),
+                "clause_count": len(candidate.get("clauses") or []),
+                "restrict_clause_count": len([
+                    x for x in (candidate.get("clauses") or [])
+                    if x.get("relation_type") == "RESTRICTS"
+                    or x.get("tag") in {"EXCLUSION", "LIMIT", "RESTRICTION"}
+                ]),
+                "benefit_match_score": benefit_match,
+                "condition_clarity_score": condition_clarity,
+                "exclusion_penalty": exclusion_penalty,
+                "coverage_breadth_score": coverage_breadth,
+                "user_filter_match_score": user_filter_match,
+                "final_score": final_score,
+                "is_eligible": is_eligible,
+                "ineligible_reason": "exclusion_penalty_too_high" if exclusion_block else (None if is_eligible else "identity_missing"),
+            },
+        )
         scored.append({
             **candidate,
             "score_breakdown": {
@@ -691,6 +714,18 @@ def _summarize_exclusion_row(exclusions: List[Dict[str, Any]]) -> str:
 
 def _compact_candidate_for_answer(candidate: Dict[str, Any]) -> Dict[str, Any]:
     prepared = _prepare_candidate(candidate)
+    logger.info(
+        "recommend compact candidate stats",
+        extra={
+            "company": prepared.get("company"),
+            "product_name": prepared.get("product_name"),
+            "rider_name": prepared.get("rider_name"),
+            "prepared_benefit_count": len(prepared.get("benefits") or []),
+            "prepared_condition_count": len(prepared.get("own_conditions") or []),
+            "prepared_exclusion_count": len(prepared.get("own_exclusions") or []),
+            "prepared_general_clause_count": len(prepared.get("own_general_clauses") or []),
+        },
+    )
     benefits = []
     for benefit in prepared["benefits"][:MAX_EVIDENCE_PER_CANDIDATE]:
         benefits.append({
@@ -1082,6 +1117,23 @@ async def _execute_task(plan_item: Dict[str, Any], state: AgentState) -> Dict[st
                 product_keywords=product_keywords,
                 limit=inputs.get("retrieval_limit", INITIAL_RETRIEVAL_LIMIT),
             )
+            for c in raw_candidates:
+                logger.info(
+                    "recommend raw candidate stats",
+                    extra={
+                        "request_id": _req(state),
+                        "company": c.get("company"),
+                        "product_name": c.get("product_name"),
+                        "rider_name": c.get("rider_name"),
+                        "benefit_count": len(c.get("benefits") or []),
+                        "clause_count": len(c.get("clauses") or []),
+                        "restrict_clause_count": len([
+                            x for x in (c.get("clauses") or [])
+                            if x.get("relation_type") == "RESTRICTS"
+                            or x.get("tag") in {"EXCLUSION", "LIMIT", "RESTRICTION"}
+                        ]),
+                    },
+                )
             scored_candidates = _score_plan_candidates(raw_candidates, inputs.get("user_filters", {}), state.get("question", ""))
             final_limit = inputs.get("final_candidate_limit", FINAL_CANDIDATE_LIMIT)
             if task_type == "COMPARE_PLANS":
