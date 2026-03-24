@@ -1,0 +1,74 @@
+[
+  {
+    "rider_id": "PROD_SAMSUNG_INTERNET_CANCER_TREATMENT_2501__RIDER_MAIN_035_01",
+    "product_id": "PROD_SAMSUNG_INTERNET_CANCER_TREATMENT_2501",
+    "name": "삼성인터넷암치료보험(2501)(갱신형,무배당) 주계약",
+    "type": "GENERAL",
+    "renewal_type": "RENEWAL",
+    "insurance_period": "20년 단위 갱신"
+  },
+  {
+    "rider_id": "PROD_SAMSUNG_INTERNET_CANCER_TREATMENT_2501__RIDER_GENERAL_049_01",
+    "product_id": "PROD_SAMSUNG_INTERNET_CANCER_TREATMENT_2501",
+    "name": "특약일반사항",
+    "type": "GENERAL",
+    "renewal_type": "RENEWAL",
+    "insurance_period": "각 특약에 따름"
+  },
+  {
+    "rider_id": "PROD_SAMSUNG_INTERNET_CANCER_TREATMENT_2501__RIDER_OPT_057_01",
+    "product_id": "PROD_SAMSUNG_INTERNET_CANCER_TREATMENT_2501",
+    "name": "삼성인터넷암치료보험(2501)(갱신형,무배당)갑상선암및기타피부암주요치료보장특약(갱신형,무배당)",
+    "type": "OPTION",
+    "renewal_type": "RENEWAL",
+    "insurance_period": "20년 만기 갱신"
+  },
+  {
+    "rider_id": "PROD_SAMSUNG_INTERNET_CANCER_TREATMENT_2501__RIDER_OPT_067_01",
+    "product_id": "PROD_SAMSUNG_INTERNET_CANCER_TREATMENT_2501",
+    "name": "삼성인터넷암치료보험(2501)(갱신형,무배당)신요양병원암입원특약(갱신형,무배당)",
+    "type": "OPTION",
+    "renewal_type": "RENEWAL",
+    "insurance_period": "20년 만기 갱신"
+  },
+  {
+    "rider_id": "PROD_SAMSUNG_INTERNET_CANCER_TREATMENT_2501__RIDER_OPT_082_01",
+    "product_id": "PROD_SAMSUNG_INTERNET_CANCER_TREATMENT_2501",
+    "name": "삼성인터넷암치료보험(2501)(갱신형,무배당)암주요치료보장특약(갱신형,무배당)",
+    "type": "OPTION",
+    "renewal_type": "RENEWAL",
+    "insurance_period": "20년 만기 갱신"
+  },
+  {
+    "rider_id": "PROD_SAMSUNG_INTERNET_CANCER_TREATMENT_2501__RIDER_OPT_097_01",
+    "product_id": "PROD_SAMSUNG_INTERNET_CANCER_TREATMENT_2501",
+    "name": "삼성인터넷암치료보험(2501)(갱신형,무배당)암직접치료(요양병원제외)입원특약(갱신형,무배당)",
+    "type": "OPTION",
+    "renewal_type": "RENEWAL",
+    "insurance_period": "20년 만기 갱신"
+  },
+  {
+    "rider_id": "PROD_SAMSUNG_INTERNET_CANCER_TREATMENT_2501__RIDER_OPT_112_01",
+    "product_id": "PROD_SAMSUNG_INTERNET_CANCER_TREATMENT_2501",
+    "name": "삼성인터넷암치료보험(2501)(갱신형,무배당)암직접치료통원특약(갱신형,무배당)",
+    "type": "OPTION",
+    "renewal_type": "RENEWAL",
+    "insurance_period": "20년 만기 갱신"
+  },
+  {
+    "rider_id": "PROD_SAMSUNG_INTERNET_CANCER_TREATMENT_2501__RIDER_OPT_126_01",
+    "product_id": "PROD_SAMSUNG_INTERNET_CANCER_TREATMENT_2501",
+    "name": "삼성인터넷암치료보험(2501)(갱신형,무배당)프리미엄암직접치료보장특약(갱신형,무배당)",
+    "type": "OPTION",
+    "renewal_type": "RENEWAL",
+    "insurance_period": "20년 만기 갱신"
+  },
+  {
+    "rider_id": "PROD_SAMSUNG_INTERNET_CANCER_TREATMENT_2501__RIDER_OPT_161_01",
+    "product_id": "PROD_SAMSUNG_INTERNET_CANCER_TREATMENT_2501",
+    "name": "삼성인터넷암치료보험(2501)(갱신형,무배당)항암약물·방사선치료후72대질병및재해보장특약(갱신형,무배당)",
+    "type": "OPTION",
+    "renewal_type": "RENEWAL",
+    "insurance_period": "20년 만기 갱신"
+  }
+]
