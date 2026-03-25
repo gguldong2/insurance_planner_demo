@@ -1,0 +1,90 @@
+[
+  {
+    "rider_id": "PROD_NH_DIRECT_CANCER_2601_TYPE2__RIDER_MAIN_041_01",
+    "product_id": "PROD_NH_DIRECT_CANCER_2601_TYPE2",
+    "name": "보통약관",
+    "type": "GENERAL",
+    "renewal_type": "NON_RENEWAL",
+    "insurance_period": "세만기형"
+  },
+  {
+    "rider_id": "PROD_NH_DIRECT_CANCER_2601_TYPE2__RIDER_OPT_080_01",
+    "product_id": "PROD_NH_DIRECT_CANCER_2601_TYPE2",
+    "name": "1-1. 암주요치료비(유사암제외)(진단후10년,연간1회한)보장",
+    "type": "OPTION",
+    "renewal_type": "NON_RENEWAL",
+    "insurance_period": "세만기형(최초 진단 확정 시 10번째 매년 진단확정일 전일까지)"
+  },
+  {
+    "rider_id": "PROD_NH_DIRECT_CANCER_2601_TYPE2__RIDER_OPT_088_01",
+    "product_id": "PROD_NH_DIRECT_CANCER_2601_TYPE2",
+    "name": "1-2. 유사암주요치료비(진단후10년,연간1회한)보장",
+    "type": "OPTION",
+    "renewal_type": "NON_RENEWAL",
+    "insurance_period": "세만기형(최초 진단 확정 시 10번째 매년 진단확정일 전일까지)"
+  },
+  {
+    "rider_id": "PROD_NH_DIRECT_CANCER_2601_TYPE2__RIDER_OPT_095_01",
+    "product_id": "PROD_NH_DIRECT_CANCER_2601_TYPE2",
+    "name": "1-3. 암주요치료비(유사암제외)(상급종합병원Ⅲ,진단후10년,연간1회한)보장 특별약관",
+    "type": "OPTION",
+    "renewal_type": "NON_RENEWAL",
+    "insurance_period": "세만기형(최초 진단 확정 시 10번째 매년 진단확정일 전일까지)"
+  },
+  {
+    "rider_id": "PROD_NH_DIRECT_CANCER_2601_TYPE2__RIDER_OPT_105_01",
+    "product_id": "PROD_NH_DIRECT_CANCER_2601_TYPE2",
+    "name": "1-4. 유사암주요치료비(상급종합병원Ⅲ,진단후10년,연간1회한)보장 특별약관",
+    "type": "OPTION",
+    "renewal_type": "NON_RENEWAL",
+    "insurance_period": "세만기형(최초 진단 확정 시 10번째 매년 진단확정일 전일까지)"
+  },
+  {
+    "rider_id": "PROD_NH_DIRECT_CANCER_2601_TYPE2__RIDER_OPT_114_01",
+    "product_id": "PROD_NH_DIRECT_CANCER_2601_TYPE2",
+    "name": "1-5. 하이클래스 암주요치료비(진단후10년,연간1회한)보장 특별약관",
+    "type": "OPTION",
+    "renewal_type": "NON_RENEWAL",
+    "insurance_period": "세만기형(최초 진단 확정 시 10번째 매년 진단확정일 전일까지)"
+  },
+  {
+    "rider_id": "PROD_NH_DIRECT_CANCER_2601_TYPE2__RIDER_OPT_123_01",
+    "product_id": "PROD_NH_DIRECT_CANCER_2601_TYPE2",
+    "name": "1-6. 하이클래스 암주요치료비(상급종합병원Ⅲ,진단후10년,연간1회한)보장 특별약관",
+    "type": "OPTION",
+    "renewal_type": "NON_RENEWAL",
+    "insurance_period": "세만기형(최초 진단 확정 시 10번째 매년 진단확정일 전일까지)"
+  },
+  {
+    "rider_id": "PROD_NH_DIRECT_CANCER_2601_TYPE2__RIDER_OPT_134_01",
+    "product_id": "PROD_NH_DIRECT_CANCER_2601_TYPE2",
+    "name": "1-7. 암주요치료비Ⅱ(유사암제외)(진단후10년,연간1회한)보장",
+    "type": "OPTION",
+    "renewal_type": "NON_RENEWAL",
+    "insurance_period": "세만기형(최초 진단 확정 시 10번째 매년 진단확정일 전일까지)"
+  },
+  {
+    "rider_id": "PROD_NH_DIRECT_CANCER_2601_TYPE2__RIDER_OPT_143_01",
+    "product_id": "PROD_NH_DIRECT_CANCER_2601_TYPE2",
+    "name": "1-8. 유사암주요치료비Ⅱ(진단후10년,연간1회한)보장",
+    "type": "OPTION",
+    "renewal_type": "NON_RENEWAL",
+    "insurance_period": "세만기형(최초 진단 확정 시 10번째 매년 진단확정일 전일까지)"
+  },
+  {
+    "rider_id": "PROD_NH_DIRECT_CANCER_2601_TYPE2__RIDER_OPT_152_01",
+    "product_id": "PROD_NH_DIRECT_CANCER_2601_TYPE2",
+    "name": "1-9. 암주요치료비Ⅱ(유사암제외)(상급종합병원Ⅲ,진단후10년,연간1회한) 보장 특별약관",
+    "type": "OPTION",
+    "renewal_type": "NON_RENEWAL",
+    "insurance_period": "세만기형(최초 진단 확정 시 10번째 매년 진단확정일 전일까지)"
+  },
+  {
+    "rider_id": "PROD_NH_DIRECT_CANCER_2601_TYPE2__RIDER_OPT_163_01",
+    "product_id": "PROD_NH_DIRECT_CANCER_2601_TYPE2",
+    "name": "1-10. 유사암주요치료비Ⅱ(상급종합병원Ⅲ,진단후10년,연간1회한)보장 특별약관",
+    "type": "OPTION",
+    "renewal_type": "NON_RENEWAL",
+    "insurance_period": "세만기형(최초 진단 확정 시 10번째 매년 진단확정일 전일까지)"
+  }
+]
