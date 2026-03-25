@@ -1,0 +1,394 @@
+[
+  {
+    "rider_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER__RIDER_MAIN_034_01",
+    "product_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER",
+    "name": "보통약관",
+    "type": "GENERAL",
+    "renewal_type": "RENEWAL",
+    "insurance_period": "자동갱신형(보험기간 만기시 자동갱신, 최종 갱신계약의 보험기간까지 보장)"
+  },
+  {
+    "rider_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER__RIDER_GENERAL_056_01",
+    "product_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER",
+    "name": "특별약관 일반사항",
+    "type": "GENERAL",
+    "renewal_type": "RENEWAL",
+    "insurance_period": "자동갱신형(보험기간 만기시 자동갱신, 최종 갱신계약의 보험기간까지 보장)"
+  },
+  {
+    "rider_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER__RIDER_OPT_074_01",
+    "product_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER",
+    "name": "1-1. 암 사망 특별약관",
+    "type": "OPTION",
+    "renewal_type": "RENEWAL",
+    "insurance_period": "자동갱신형(보험기간 만기시 자동갱신, 최종 갱신계약의 보험기간까지 보장)"
+  },
+  {
+    "rider_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER__RIDER_OPT_076_01",
+    "product_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER",
+    "name": "1-2. 암 진단 생활자금(유사암 제외)(5년월지급형) 특별약관",
+    "type": "OPTION",
+    "renewal_type": "RENEWAL",
+    "insurance_period": "자동갱신형(보험기간 만기시 자동갱신, 최종 갱신계약의 보험기간까지 보장)"
+  },
+  {
+    "rider_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER__RIDER_OPT_079_01",
+    "product_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER",
+    "name": "1-3. 두 번째 암 진단 생활자금(5년월지급형) 특별약관",
+    "type": "OPTION",
+    "renewal_type": "RENEWAL",
+    "insurance_period": "자동갱신형(보험기간 만기시 자동갱신, 최종 갱신계약의 보험기간까지 보장)"
+  },
+  {
+    "rider_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER__RIDER_OPT_084_01",
+    "product_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER",
+    "name": "1-4. 암 원인 장애 생활자금(5년월지급형) 특별약관",
+    "type": "OPTION",
+    "renewal_type": "RENEWAL",
+    "insurance_period": "자동갱신형(보험기간 만기시 자동갱신, 최종 갱신계약의 보험기간까지 보장)"
+  },
+  {
+    "rider_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER__RIDER_OPT_087_01",
+    "product_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER",
+    "name": "1-5. 암 원인 심한장애 생활자금(5년월지급형) 특별약관",
+    "type": "OPTION",
+    "renewal_type": "RENEWAL",
+    "insurance_period": "자동갱신형(보험기간 만기시 자동갱신, 최종 갱신계약의 보험기간까지 보장)"
+  },
+  {
+    "rider_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER__RIDER_OPT_090_01",
+    "product_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER",
+    "name": "1-6. 암 진단비(유사암 및 특정소액암 제외) 특별약관",
+    "type": "OPTION",
+    "renewal_type": "RENEWAL",
+    "insurance_period": "자동갱신형(보험기간 만기시 자동갱신, 최종 갱신계약의 보험기간까지 보장)"
+  },
+  {
+    "rider_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER__RIDER_OPT_093_01",
+    "product_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER",
+    "name": "1-7. 유사암 진단비 특별약관",
+    "type": "OPTION",
+    "renewal_type": "RENEWAL",
+    "insurance_period": "자동갱신형(보험기간 만기시 자동갱신, 최종 갱신계약의 보험기간까지 보장)"
+  },
+  {
+    "rider_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER__RIDER_OPT_095_01",
+    "product_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER",
+    "name": "1-8. 유사암(90일면책) 진단비 특별약관",
+    "type": "OPTION",
+    "renewal_type": "RENEWAL",
+    "insurance_period": "자동갱신형(보험기간 만기시 자동갱신, 최종 갱신계약의 보험기간까지 보장)"
+  },
+  {
+    "rider_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER__RIDER_OPT_098_01",
+    "product_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER",
+    "name": "1-9. 신재진단암(기타피부암 및 갑상선암 포함) 진단비(1년주기,5회한) 특별약관",
+    "type": "OPTION",
+    "renewal_type": "RENEWAL",
+    "insurance_period": "자동갱신형(보험기간 만기시 자동갱신, 최종 갱신계약의 보험기간까지 보장)"
+  },
+  {
+    "rider_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER__RIDER_OPT_103_01",
+    "product_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER",
+    "name": "1-10. 위암 및 식도암 진단비 특별약관",
+    "type": "OPTION",
+    "renewal_type": "RENEWAL",
+    "insurance_period": "자동갱신형(보험기간 만기시 자동갱신, 최종 갱신계약의 보험기간까지 보장)"
+  },
+  {
+    "rider_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER__RIDER_OPT_105_01",
+    "product_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER",
+    "name": "1-11. 대장암 및 소장암 진단비 특별약관",
+    "type": "OPTION",
+    "renewal_type": "RENEWAL",
+    "insurance_period": "자동갱신형(보험기간 만기시 자동갱신, 최종 갱신계약의 보험기간까지 보장)"
+  },
+  {
+    "rider_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER__RIDER_OPT_108_01",
+    "product_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER",
+    "name": "1-12. 폐암 및 후두암 진단비 특별약관",
+    "type": "OPTION",
+    "renewal_type": "RENEWAL",
+    "insurance_period": "자동갱신형(보험기간 만기시 자동갱신, 최종 갱신계약의 보험기간까지 보장)"
+  },
+  {
+    "rider_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER__RIDER_OPT_110_01",
+    "product_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER",
+    "name": "1-13. 간·담낭·담도암 및 췌장암 진단비 특별약관",
+    "type": "OPTION",
+    "renewal_type": "RENEWAL",
+    "insurance_period": "자동갱신형(보험기간 만기시 자동갱신, 최종 갱신계약의 보험기간까지 보장)"
+  },
+  {
+    "rider_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER__RIDER_OPT_112_01",
+    "product_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER",
+    "name": "1-14. 유방암 진단비 특별약관",
+    "type": "OPTION",
+    "renewal_type": "RENEWAL",
+    "insurance_period": "자동갱신형(보험기간 만기시 자동갱신, 최종 갱신계약의 보험기간까지 보장)"
+  },
+  {
+    "rider_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER__RIDER_OPT_114_01",
+    "product_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER",
+    "name": "1-15. 여성생식기암 진단비 특별약관",
+    "type": "OPTION",
+    "renewal_type": "RENEWAL",
+    "insurance_period": "자동갱신형(보험기간 만기시 자동갱신, 최종 갱신계약의 보험기간까지 보장)"
+  },
+  {
+    "rider_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER__RIDER_OPT_116_01",
+    "product_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER",
+    "name": "1-16. 남성생식기암 진단비 특별약관",
+    "type": "OPTION",
+    "renewal_type": "RENEWAL",
+    "insurance_period": "자동갱신형(보험기간 만기시 자동갱신, 최종 갱신계약의 보험기간까지 보장)"
+  },
+  {
+    "rider_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER__RIDER_OPT_118_01",
+    "product_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER",
+    "name": "1-17. 비뇨기관암 진단비 특별약관",
+    "type": "OPTION",
+    "renewal_type": "RENEWAL",
+    "insurance_period": "자동갱신형(보험기간 만기시 자동갱신, 최종 갱신계약의 보험기간까지 보장)"
+  },
+  {
+    "rider_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER__RIDER_OPT_120_01",
+    "product_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER",
+    "name": "1-18. 암 급여 MRI 촬영검사비용지원(연간1회한) 특별약관",
+    "type": "OPTION",
+    "renewal_type": "RENEWAL",
+    "insurance_period": "자동갱신형(보험기간 만기시 자동갱신, 최종 갱신계약의 보험기간까지 보장)"
+  },
+  {
+    "rider_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER__RIDER_OPT_123_01",
+    "product_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER",
+    "name": "1-19. 암 최초수술비(유사암 제외) 특별약관",
+    "type": "OPTION",
+    "renewal_type": "RENEWAL",
+    "insurance_period": "자동갱신형(보험기간 만기시 자동갱신, 최종 갱신계약의 보험기간까지 보장)"
+  },
+  {
+    "rider_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER__RIDER_OPT_126_01",
+    "product_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER",
+    "name": "1-20. 암 수술비(유사암 제외) 특별약관",
+    "type": "OPTION",
+    "renewal_type": "RENEWAL",
+    "insurance_period": "자동갱신형(보험기간 만기시 자동갱신, 최종 갱신계약의 보험기간까지 보장)"
+  },
+  {
+    "rider_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER__RIDER_OPT_129_01",
+    "product_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER",
+    "name": "1-21. 유사암 최초수술비 특별약관",
+    "type": "OPTION",
+    "renewal_type": "RENEWAL",
+    "insurance_period": "자동갱신형(보험기간 만기시 자동갱신, 최종 갱신계약의 보험기간까지 보장)"
+  },
+  {
+    "rider_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER__RIDER_OPT_132_01",
+    "product_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER",
+    "name": "1-22. 유사암 수술비 특별약관",
+    "type": "OPTION",
+    "renewal_type": "RENEWAL",
+    "insurance_period": "자동갱신형(보험기간 만기시 자동갱신, 최종 갱신계약의 보험기간까지 보장)"
+  },
+  {
+    "rider_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER__RIDER_OPT_135_01",
+    "product_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER",
+    "name": "1-23. 암 다빈치로봇 수술비 특별약관",
+    "type": "OPTION",
+    "renewal_type": "RENEWAL",
+    "insurance_period": "자동갱신형(보험기간 만기시 자동갱신, 최종 갱신계약의 보험기간까지 보장)"
+  },
+  {
+    "rider_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER__RIDER_OPT_140_01",
+    "product_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER",
+    "name": "1-24. 항암방사선∙약물 치료비Ⅲ 특별약관",
+    "type": "OPTION",
+    "renewal_type": "RENEWAL",
+    "insurance_period": "자동갱신형(보험기간 만기시 자동갱신, 최종 갱신계약의 보험기간까지 보장)"
+  },
+  {
+    "rider_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER__RIDER_OPT_143_01",
+    "product_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER",
+    "name": "1-25. 계속받는 항암방사선∙약물 치료비(연간1회한) 특별약관",
+    "type": "OPTION",
+    "renewal_type": "RENEWAL",
+    "insurance_period": "자동갱신형(보험기간 만기시 자동갱신, 최종 갱신계약의 보험기간까지 보장)"
+  },
+  {
+    "rider_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER__RIDER_OPT_146_01",
+    "product_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER",
+    "name": "1-26. 표적항암약물허가 치료비 특별약관",
+    "type": "OPTION",
+    "renewal_type": "RENEWAL",
+    "insurance_period": "자동갱신형(보험기간 만기시 자동갱신, 최종 갱신계약의 보험기간까지 보장)"
+  },
+  {
+    "rider_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER__RIDER_OPT_150_01",
+    "product_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER",
+    "name": "1-27. 항암 양성자방사선 치료비 특별약관",
+    "type": "OPTION",
+    "renewal_type": "RENEWAL",
+    "insurance_period": "자동갱신형(보험기간 만기시 자동갱신, 최종 갱신계약의 보험기간까지 보장)"
+  },
+  {
+    "rider_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER__RIDER_OPT_152_01",
+    "product_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER",
+    "name": "1-28. 항암 세기조절방사선 치료비 특별약관",
+    "type": "OPTION",
+    "renewal_type": "RENEWAL",
+    "insurance_period": "자동갱신형(보험기간 만기시 자동갱신, 최종 갱신계약의 보험기간까지 보장)"
+  },
+  {
+    "rider_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER__RIDER_OPT_155_01",
+    "product_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER",
+    "name": "1-29. 갑상선암 수술후 호르몬약물허가 치료비 특별약관",
+    "type": "OPTION",
+    "renewal_type": "RENEWAL",
+    "insurance_period": "자동갱신형(보험기간 만기시 자동갱신, 최종 갱신계약의 보험기간까지 보장)"
+  },
+  {
+    "rider_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER__RIDER_OPT_158_01",
+    "product_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER",
+    "name": "1-30. 암 급여 주요통증완화치료비(연간1회한) 특별약관",
+    "type": "OPTION",
+    "renewal_type": "RENEWAL",
+    "insurance_period": "자동갱신형(보험기간 만기시 자동갱신, 최종 갱신계약의 보험기간까지 보장)"
+  },
+  {
+    "rider_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER__RIDER_OPT_161_01",
+    "product_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER",
+    "name": "1-31. 말기암 호스피스완화치료비(가정형,입원형) 특별약관",
+    "type": "OPTION",
+    "renewal_type": "RENEWAL",
+    "insurance_period": "자동갱신형(보험기간 만기시 자동갱신, 최종 갱신계약의 보험기간까지 보장)"
+  },
+  {
+    "rider_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER__RIDER_OPT_164_01",
+    "product_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER",
+    "name": "1-32. 암 직접치료 입원일당Ⅱ(1일이상)(요양병원 제외) 특별약관",
+    "type": "OPTION",
+    "renewal_type": "RENEWAL",
+    "insurance_period": "자동갱신형(보험기간 만기시 자동갱신, 최종 갱신계약의 보험기간까지 보장)"
+  },
+  {
+    "rider_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER__RIDER_OPT_168_01",
+    "product_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER",
+    "name": "1-33. 암 요양병원 입원일당Ⅱ(1일이상, 90일한도) 특별약관",
+    "type": "OPTION",
+    "renewal_type": "RENEWAL",
+    "insurance_period": "자동갱신형(보험기간 만기시 자동갱신, 최종 갱신계약의 보험기간까지 보장)"
+  },
+  {
+    "rider_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER__RIDER_OPT_172_01",
+    "product_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER",
+    "name": "1-34. 암 직접치료 종합병원 입원일당(1일이상) 특별약관",
+    "type": "OPTION",
+    "renewal_type": "RENEWAL",
+    "insurance_period": "자동갱신형(보험기간 만기시 자동갱신, 최종 갱신계약의 보험기간까지 보장)"
+  },
+  {
+    "rider_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER__RIDER_OPT_176_01",
+    "product_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER",
+    "name": "1-35. 암 직접치료 통원일당(상급종합병원) 특별약관",
+    "type": "OPTION",
+    "renewal_type": "RENEWAL",
+    "insurance_period": "자동갱신형(보험기간 만기시 자동갱신, 최종 갱신계약의 보험기간까지 보장)"
+  },
+  {
+    "rider_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER__RIDER_OPT_180_01",
+    "product_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER",
+    "name": "1-36. 암 직접치료 통원일당(요양병원 제외)(연간30회한) 특별약관",
+    "type": "OPTION",
+    "renewal_type": "RENEWAL",
+    "insurance_period": "자동갱신형(보험기간 만기시 자동갱신, 최종 갱신계약의 보험기간까지 보장)"
+  },
+  {
+    "rider_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER__RIDER_OPT_184_01",
+    "product_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER",
+    "name": "1-37. 암 진단 후 암 특정치료비(진단 후 10년, 연간1회한) 특별약관",
+    "type": "OPTION",
+    "renewal_type": "RENEWAL",
+    "insurance_period": "자동갱신형(보험기간 만기시 자동갱신, 최종 갱신계약의 보험기간까지 보장)"
+  },
+  {
+    "rider_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER__RIDER_OPT_191_01",
+    "product_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER",
+    "name": "1-38. 암 진단 후 상급종합병원 암 특정치료비 특별약관",
+    "type": "OPTION",
+    "renewal_type": "RENEWAL",
+    "insurance_period": "자동갱신형(보험기간 만기시 자동갱신, 최종 갱신계약의 보험기간까지 보장)"
+  },
+  {
+    "rider_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER__RIDER_OPT_198_01",
+    "product_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER",
+    "name": "1-39. 암 진단 후 상급종합병원Ⅱ 암 특정치료비 특별약관",
+    "type": "OPTION",
+    "renewal_type": "RENEWAL",
+    "insurance_period": "자동갱신형(보험기간 만기시 자동갱신, 최종 갱신계약의 보험기간까지 보장)"
+  },
+  {
+    "rider_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER__RIDER_OPT_205_01",
+    "product_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER",
+    "name": "1-40. 하이클래스 암 특정치료비(진단 후 10년, 연간1회한) 특별약관",
+    "type": "OPTION",
+    "renewal_type": "RENEWAL",
+    "insurance_period": "자동갱신형(보험기간 만기시 자동갱신, 최종 갱신계약의 보험기간까지 보장)"
+  },
+  {
+    "rider_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER__RIDER_OPT_210_01",
+    "product_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER",
+    "name": "1-41. 하이클래스 항암약물치료비(진단 후 10년, 연간1회한) 특별약관",
+    "type": "OPTION",
+    "renewal_type": "RENEWAL",
+    "insurance_period": "자동갱신형(보험기간 만기시 자동갱신, 최종 갱신계약의 보험기간까지 보장)"
+  },
+  {
+    "rider_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER__RIDER_OPT_214_01",
+    "product_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER",
+    "name": "1-42. 특정 항암부작용 약제 치료비(급여)(연간1회한) 특별약관",
+    "type": "OPTION",
+    "renewal_type": "RENEWAL",
+    "insurance_period": "자동갱신형(보험기간 만기시 자동갱신, 최종 갱신계약의 보험기간까지 보장)"
+  },
+  {
+    "rider_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER__RIDER_OPT_217_01",
+    "product_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER",
+    "name": "1-43. 종합병원 특정항암호르몬약물허가 치료비Ⅱ(연간1회한) 특별약관",
+    "type": "OPTION",
+    "renewal_type": "RENEWAL",
+    "insurance_period": "자동갱신형(보험기간 만기시 자동갱신, 최종 갱신계약의 보험기간까지 보장)"
+  },
+  {
+    "rider_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER__RIDER_OPT_223_01",
+    "product_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER",
+    "name": "2-1. 급여 양전자단층촬영(PET)검사비용지원(연간1회한) 특별약관",
+    "type": "OPTION",
+    "renewal_type": "RENEWAL",
+    "insurance_period": "자동갱신형(보험기간 만기시 자동갱신, 최종 갱신계약의 보험기간까지 보장)"
+  },
+  {
+    "rider_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER__RIDER_OPT_227_01",
+    "product_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER",
+    "name": "27-1. 질병 관련 특별약관",
+    "type": "OPTION",
+    "renewal_type": "RENEWAL",
+    "insurance_period": "자동갱신형(보험기간 만기시 자동갱신, 최종 갱신계약의 보험기간까지 보장)"
+  },
+  {
+    "rider_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER__RIDER_OPT_228_01",
+    "product_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER",
+    "name": "27-1-32. [갱신형] 항암 중입자방사선 치료비(1년50%) 특별약관",
+    "type": "OPTION",
+    "renewal_type": "RENEWAL",
+    "insurance_period": "자동갱신형(보험기간 만기시 자동갱신, 최종 갱신계약의 보험기간까지 보장)"
+  },
+  {
+    "rider_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER__RIDER_OPT_231_01",
+    "product_id": "PROD_SAMSUNG_DIRECT_CHAK_EASY_CANCER",
+    "name": "27-1-35. [갱신형] 항암 방사선 치료비(1년50%) 특별약관",
+    "type": "OPTION",
+    "renewal_type": "RENEWAL",
+    "insurance_period": "자동갱신형(보험기간 만기시 자동갱신, 최종 갱신계약의 보험기간까지 보장)"
+  }
+]
