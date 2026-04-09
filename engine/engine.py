@@ -1,12 +1,5 @@
 """engine/engine.py — Insurance RAG query engine (singleton).
 
-이 파일이 있는 engine/ 디렉토리 하나만 다른 프로젝트로 복사해 사용할 수 있습니다.
-원본 프로젝트 구조(backend/ 등)에 대한 의존성이 없습니다.
-
-외부 호출 방법:
-    from engine.engine import query_engine
-    result = await query_engine("질문")   # str (markdown) 반환
-
 초기화:
     - 최초 호출 시 1회만 수행 (LLM 클라이언트, 임베딩 모델, DB 연결)
     - 이후 호출은 초기화된 객체를 재사용 (싱글턴)
