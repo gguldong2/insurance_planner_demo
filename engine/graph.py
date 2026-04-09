@@ -17,19 +17,18 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import re
 import time
 from typing import Any, Dict, List, Optional, TypedDict
-
-import os
 
 from dotenv import load_dotenv
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 from langgraph.graph import END, START, StateGraph
 
-from backend.logging_utils import setup_logging
-from backend.logic.retrievers import (
+from .logging_utils import setup_logging          # ← 상대 import
+from .retrievers import (                          # ← 상대 import
     link_concept_candidates,
     retrieve_benefit,
     retrieve_comparison,
@@ -731,7 +730,7 @@ def _compact_candidate_for_answer(candidate: Dict[str, Any]) -> Dict[str, Any]:
     benefits = []
     for benefit in prepared["benefits"][:MAX_EVIDENCE_PER_CANDIDATE]:
         benefits.append({
-            "benefit_name": benefit.get("benefit_name"),  # full name preserved
+            "benefit_name": benefit.get("benefit_name"),
             "amount_text": benefit.get("amount_text"),
             "condition_summary": _compact_text(benefit.get("condition_summary", ""), 180),
         })

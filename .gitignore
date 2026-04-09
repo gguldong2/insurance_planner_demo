@@ -64,7 +64,9 @@ backend/data/debug/
 __pycache__/
 *.pyc
 
-
+# Engine serving config (contains credentials)
+engine/.env.serving
+engine/__pycache__/
 
 
 
