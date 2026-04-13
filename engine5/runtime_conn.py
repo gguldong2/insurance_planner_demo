@@ -1,5 +1,6 @@
 import os
 import json
+import urllib.parse
 import psycopg2
 import asyncio
 from qdrant_client import AsyncQdrantClient
@@ -24,7 +25,12 @@ class RuntimeDB:
     def _init_connections(self):
         print("🔌 [Runtime] Connecting to Databases...")
 
-        self.qdrant = AsyncQdrantClient(url=os.getenv("QDRANT_URL", "http://localhost:6333"))
+        qdrant_url = os.getenv("QDRANT_URL", "http://localhost:6333")
+        # qdrant_client 기본 포트는 6333이므로, URL에 포트가 없으면 명시적으로 지정해야 함
+        # (엘리스 터널 등 HTTPS 443 환경에서 6333으로 연결 시도하는 문제 방지)
+        _parsed = urllib.parse.urlparse(qdrant_url)
+        _qdrant_port = _parsed.port or (443 if _parsed.scheme == "https" else 6333)
+        self.qdrant = AsyncQdrantClient(url=qdrant_url, port=_qdrant_port, check_compatibility=False)
 
         host = os.getenv("DB_HOST") or os.getenv("POSTGRES_HOST", "localhost")
         port = os.getenv("DB_PORT") or os.getenv("POSTGRES_PORT", "5432")

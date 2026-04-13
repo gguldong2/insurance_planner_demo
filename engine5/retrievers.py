@@ -11,9 +11,10 @@ import logging
 import time
 from typing import Any, Dict, List, Optional
 
-from FlagEmbedding import BGEM3FlagModel
+import os
+
+from openai import AsyncOpenAI
 from qdrant_client import models
-import torch
 
 from .runtime_conn import RuntimeDB  # ← 상대 import (engine 패키지 내부)
 
@@ -34,15 +35,18 @@ def _ms(start: float) -> int:
     return int((time.perf_counter() - start) * 1000)
 
 
-# Single shared embedding model instance.
-device = "cuda" if torch.cuda.is_available() else "cpu"
-embed_model = BGEM3FlagModel("BAAI/bge-m3", use_fp16=True, device=device)
+_embed_client = AsyncOpenAI(
+    base_url=os.getenv("EMBED_API_BASE", "http://localhost:8001/v1"),
+    api_key="dummy",
+)
+_embed_model = os.getenv("EMBED_MODEL_NAME", "BAAI/bge-m3")
 db = RuntimeDB()
 
 
-def get_embedding(text: str):
-    """Encode text into the dense vector used by Qdrant searches."""
-    return embed_model.encode(text, return_dense=True)["dense_vecs"]
+async def get_embedding(text: str):
+    """Encode text via remote vLLM embedding endpoint."""
+    resp = await _embed_client.embeddings.create(model=_embed_model, input=text)
+    return resp.data[0].embedding
 
 
 async def link_concept_candidates(keyword: str, limit: int = 3) -> List[Dict[str, Any]]:
@@ -51,7 +55,7 @@ async def link_concept_candidates(keyword: str, limit: int = 3) -> List[Dict[str
         return []
 
     logger.info("[Retriever:Grounding] keyword=%s", keyword)
-    vec = get_embedding(keyword)
+    vec = await get_embedding(keyword)
     hits = await db.search_vector(collection="concepts", vector=vec, limit=limit)
 
     candidates: List[Dict[str, Any]] = []
@@ -103,7 +107,7 @@ async def retrieve_exclusion(concept_id: str) -> List[Dict[str, Any]]:
     """Fetch exclusion/limitation clauses relevant to a concept."""
     started = time.perf_counter()
     logger.info("exclusion retrieval started", extra={"concept_id": concept_id})
-    vec = get_embedding(f"{concept_id} 면책 또는 제한")
+    vec = await get_embedding(f"{concept_id} 면책 또는 제한")
 
     filter_cond = models.Filter(
         must=[
@@ -183,7 +187,7 @@ async def retrieve_condition(concept_id: str) -> List[Dict[str, Any]]:
 
         if len(condition_text) < 10 or "참조" in condition_text:
             logger.info("condition fallback to vector", extra={"concept_id": concept_id, "benefit_name": item.get("benefit_name")})
-            vec = get_embedding(f"{item['benefit_name']} 지급 조건 상세")
+            vec = await get_embedding(f"{item['benefit_name']} 지급 조건 상세")
             filter_cond = models.Filter(
                 must=[
                     models.FieldCondition(key="type", match=models.MatchValue(value="clause")),
@@ -218,7 +222,7 @@ async def retrieve_term(keyword: str) -> Optional[Dict[str, Any]]:
     if not keyword:
         return None
 
-    vec = get_embedding(keyword)
+    vec = await get_embedding(keyword)
 
     try:
         glossary_hits = await db.search_vector(collection="glossary", vector=vec, limit=1)
