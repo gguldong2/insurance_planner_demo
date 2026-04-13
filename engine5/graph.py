@@ -302,6 +302,34 @@ INSURANCE_HINTS = (
 )
 
 
+# 약어 매핑: 회사 full name → LLM이 답변에서 쓸 수 있는 표현들(공식 전체명·축약어 포함)
+_COMPANY_ABBREV_MAP: Dict[str, List[str]] = {
+    "삼성화재": ["삼성화재", "삼성화재해상보험", "삼성화재보험"],
+    "삼성생명": ["삼성생명", "삼성생명보험"],
+    "교보라이프플래닛": ["교보라이프플래닛", "교보라이프플래닛생명", "교보라이프", "교보"],
+    "NH농협손해보험": ["NH농협손해보험", "NH농협", "농협손해보험", "농협", "NH손해보험"],
+    "한화생명": ["한화생명", "한화생명보험", "한화"],
+}
+
+
+def _normalize_for_guard(text: str) -> str:
+    """guard 비교용 정규화: 띄어쓰기·괄호 제거 후 소문자로 변환."""
+    text = (text or "").replace(" ", "")
+    text = re.sub(r"[()（）\[\]]", "", text)
+    return text.lower()
+
+
+def _build_guard_tokens() -> List[str]:
+    tokens: set[str] = set()
+    for company, abbrevs in _COMPANY_ABBREV_MAP.items():
+        tokens.add(company)
+        tokens.update(abbrevs)
+    return sorted(tokens)
+
+
+HALLUCINATION_GUARD_TOKENS: List[str] = _build_guard_tokens()
+
+
 def update_trace(state: AgentState, node: str, msg: str) -> List[str]:
     trace = list(state.get("trace_log", []) or [])
     trace.append(f"[{node}] {msg}")
@@ -1317,9 +1345,16 @@ async def node_generator(state: AgentState) -> Dict[str, Any]:
     if intent == "recommend":
         answer = re.sub(r"\n?#+?\s*비교 대상.*", "", answer, flags=re.DOTALL).strip()
     allowed = state.get("allowed_entities", {}) or {}
-    flattened_allowed = " ".join(allowed.get("companies", []) + allowed.get("products", []) + allowed.get("riders", []))
-    for suspicious in ["삼성", "KB", "교보", "DB손해", "메리츠"]:
-        if suspicious in answer and suspicious not in flattened_allowed:
+    allowed_parts = allowed.get("companies", []) + allowed.get("products", []) + allowed.get("riders", [])
+    # allowed 회사의 모든 약어·전체명도 허용 범위에 포함 (오탐 방지)
+    expanded_allowed: List[str] = list(allowed_parts)
+    for company in allowed.get("companies", []):
+        expanded_allowed.extend(_COMPANY_ABBREV_MAP.get(company, []))
+    norm_answer = _normalize_for_guard(" ".join([answer]))
+    norm_allowed = _normalize_for_guard(" ".join(expanded_allowed))
+    for suspicious in HALLUCINATION_GUARD_TOKENS:
+        norm_suspicious = _normalize_for_guard(suspicious)
+        if norm_suspicious in norm_answer and norm_suspicious not in norm_allowed:
             answer = "현재 검색된 근거 내에서 확인 가능한 회사·상품·특약만 답변하도록 제한되어 있습니다. 검색 결과에 없는 회사명이나 상품명은 제외하고 다시 확인해 주세요."
             break
     if intent == "recommend" and answer_skeleton.get("summary_table_rows") and "추천 상품 요약표" not in answer:

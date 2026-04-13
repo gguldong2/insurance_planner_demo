@@ -374,9 +374,10 @@ async def retrieve_plan_catalog(
 
         if concept_id:
             concept_filtered = [b for b in benefits if b.get("concept_id") == concept_id]
-            if not concept_filtered:
+            if concept_filtered:
+                item["benefits"] = concept_filtered
+            elif not product_keywords:
                 continue
-            item["benefits"] = concept_filtered
 
         if product_keywords:
             haystack = _normalize_keyword_text(f"{item.get('company', '')} {item.get('product_name', '')} {item.get('rider_name', '')}")
