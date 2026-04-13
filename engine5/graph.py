@@ -29,6 +29,7 @@ from langgraph.graph import END, START, StateGraph
 
 from .logging_utils import setup_logging          # ← 상대 import
 from .retrievers import (                          # ← 상대 import
+    _normalize_keyword_text,
     link_concept_candidates,
     retrieve_benefit,
     retrieve_comparison,
@@ -1166,7 +1167,25 @@ async def _execute_task(plan_item: Dict[str, Any], state: AgentState) -> Dict[st
             scored_candidates = _score_plan_candidates(raw_candidates, inputs.get("user_filters", {}), state.get("question", ""))
             final_limit = inputs.get("final_candidate_limit", FINAL_CANDIDATE_LIMIT)
             if task_type == "COMPARE_PLANS":
-                selected = scored_candidates[:final_limit]
+                # Diversity pass: ensure at least 1 candidate per requested company/keyword
+                # so that explicit comparison targets are never dropped by the final limit cut.
+                if product_keywords:
+                    diversity_slots: List[Dict[str, Any]] = []
+                    remaining = list(scored_candidates)
+                    for kwd in product_keywords:
+                        norm_kwd = _normalize_keyword_text(kwd)
+                        for i, cand in enumerate(remaining):
+                            haystack = _normalize_keyword_text(
+                                f"{cand.get('company', '')} {cand.get('product_name', '')} {cand.get('rider_name', '')}"
+                            )
+                            if norm_kwd in haystack:
+                                diversity_slots.append(remaining.pop(i))
+                                break
+                    # Fill remaining slots up to final_limit with highest-scored candidates
+                    fill_count = max(0, final_limit - len(diversity_slots))
+                    selected = diversity_slots + remaining[:fill_count]
+                else:
+                    selected = scored_candidates[:final_limit]
                 status = "success" if len(selected) >= 2 else "no_evidence"
                 summary = f"비교 후보 {len(selected)}건 확보"
             else:
