@@ -370,9 +370,12 @@ async def retrieve_plan_catalog(
 
         if concept_id:
             concept_filtered = [b for b in benefits if b.get("concept_id") == concept_id]
-            if not concept_filtered:
+            if concept_filtered:
+                item["benefits"] = concept_filtered
+            elif not product_keywords:
+                # concept도 없고 keyword도 없으면 근거 불충분 → 제외
                 continue
-            item["benefits"] = concept_filtered
+            # product_keywords가 명시된 경우: keyword 필터가 이미 통과했으므로 후보 유지
 
         if product_keywords:
             haystack = _normalize_keyword_text(f"{item.get('company', '')} {item.get('product_name', '')} {item.get('rider_name', '')}")
