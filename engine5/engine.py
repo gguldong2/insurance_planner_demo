@@ -112,8 +112,11 @@ async def query_engine_stream(question: str) -> AsyncIterator[str]:
     """Insurance RAG 파이프라인을 스트리밍으로 실행하고 토큰을 하나씩 yield한다.
 
     Example:
-        from engine.engine import query_engine_stream
+        from api.engine5.engine import query_engine_stream
+
+        # engine4의 query_lightrag_streaming과 동일한 방식으로 사용
         async for chunk in query_engine_stream("암 진단비 보장 조건이 뭐야?"):
+            # chunk: str (토큰 하나씩)
             print(chunk, end="", flush=True)
     """
     _, stream = await query_engine_stream_with_metadata(question)
@@ -134,7 +137,7 @@ async def query_engine_stream_with_metadata(
         - stream: 생성 중인 토큰을 하나씩 yield하는 AsyncIterator[str]
 
     Example:
-        from engine.engine import query_engine_stream_with_metadata
+        from api.engine5.engine import query_engine_stream_with_metadata
         meta, stream = await query_engine_stream_with_metadata("암 진단비 보장 조건이 뭐야?")
         async for chunk in stream:
             print(chunk, end="", flush=True)
