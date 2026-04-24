@@ -5,10 +5,13 @@ import time
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
+import json
+
 import uvicorn
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from backend.graph import app_graph
@@ -145,6 +148,120 @@ async def chat_endpoint(req: ChatRequest):
     except Exception as exc:
         logger.exception("chat request failed", extra={"request_id": request_id})
         raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post("/chat/stream")
+async def chat_stream_endpoint(req: ChatRequest):
+    """Run the LangGraph workflow and stream LLM tokens via SSE."""
+    request_id = uuid4().hex[:12]
+    started = time.perf_counter()
+    logger.info("stream chat request started", extra={"request_id": request_id, "query": req.query})
+
+    initial_state: Dict[str, Any] = {
+        "question": req.query,
+        "request_id": request_id,
+        "intent": "",
+        "tasks": [],
+        "task_candidates": [],
+        "required_tasks": [],
+        "concept_keywords": [],
+        "product_keywords": [],
+        "analysis_notes": [],
+        "user_filters": {},
+        "resolved_concepts": [],
+        "task_plan": [],
+        "task_results": [],
+        "response_sections": [],
+        "guarded_sections": [],
+        "plan_candidates": [],
+        "allowed_entities": {},
+        "final_answer": "",
+        "trace_log": [],
+        "node_models": {},
+        "execution_metrics": {},
+    }
+    config = {
+        "run_name": "planner_chat_stream",
+        "tags": ["env:dev", "architecture:planner", "version:4.0"],
+        "metadata": {"user_id": "demo_user"},
+    }
+
+    async def event_generator():
+        try:
+            final_result = None
+            async for event in app_graph.astream_events(initial_state, config, version="v2"):
+                etype = event["event"]
+                ename = event.get("name", "")
+
+                if (
+                    etype == "on_chat_model_stream"
+                    and event.get("metadata", {}).get("langgraph_node") == "generator"
+                ):
+                    chunk = event["data"]["chunk"]
+                    if hasattr(chunk, "content") and chunk.content:
+                        yield f"data: {json.dumps({'type': 'chunk', 'text': chunk.content}, ensure_ascii=False)}\n\n"
+
+                elif etype == "on_chain_end" and not event.get("metadata", {}).get("langgraph_node"):
+                    output = event["data"].get("output", {})
+                    if isinstance(output, dict) and "final_answer" in output:
+                        final_result = output
+
+            if final_result:
+                tasks = final_result.get("tasks", []) or []
+                task_results = final_result.get("task_results", []) or []
+                task_statuses = [
+                    {
+                        "task_type": x.get("task_type"),
+                        "status": x.get("status"),
+                        "evidence_count": x.get("evidence_count", len(x.get("evidence", []))),
+                        "duration_ms": x.get("duration_ms"),
+                    }
+                    for x in task_results
+                ]
+                total_ms = int((time.perf_counter() - started) * 1000)
+                logger.info(
+                    "stream chat request finished",
+                    extra={
+                        "request_id": request_id,
+                        "intent": final_result.get("intent"),
+                        "tasks": tasks,
+                        "total_ms": total_ms,
+                    },
+                )
+                done_payload = {
+                    "type": "done",
+                    "answer": final_result.get("final_answer", "답변을 생성하지 못했습니다."),
+                    "logs": final_result.get("trace_log", []) or [],
+                    "tasks": tasks,
+                    "primary_task": tasks[0] if tasks else None,
+                    "request_id": request_id,
+                    "task_statuses": task_statuses,
+                    "intent": final_result.get("intent"),
+                    "task_candidates": final_result.get("task_candidates", []) or [],
+                    "required_tasks": final_result.get("required_tasks", []) or [],
+                    "concept_keywords": final_result.get("concept_keywords", []) or [],
+                    "product_keywords": final_result.get("product_keywords", []) or [],
+                    "user_filters": final_result.get("user_filters", {}) or {},
+                    "resolved_concepts": final_result.get("resolved_concepts", []) or [],
+                    "task_plan": final_result.get("task_plan", []) or [],
+                    "task_results": task_results,
+                    "response_sections": final_result.get("response_sections", []) or [],
+                    "guarded_sections": final_result.get("guarded_sections", []) or [],
+                    "plan_candidates": final_result.get("plan_candidates", []) or [],
+                    "allowed_entities": final_result.get("allowed_entities", {}) or {},
+                }
+                yield f"data: {json.dumps(done_payload, ensure_ascii=False)}\n\n"
+            else:
+                yield f"data: {json.dumps({'type': 'error', 'message': '그래프 실행 결과를 받지 못했습니다.'}, ensure_ascii=False)}\n\n"
+        except Exception as exc:
+            logger.exception("stream chat request failed", extra={"request_id": request_id})
+            yield f"data: {json.dumps({'type': 'error', 'message': str(exc)}, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 if __name__ == "__main__":

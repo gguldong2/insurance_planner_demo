@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any, AsyncIterator
 
 # ── .env.serving 로드 (모든 import보다 먼저 실행해야 DB/LLM 접속 정보가 설정됨) ──
 from dotenv import load_dotenv
@@ -105,3 +106,113 @@ async def query_engine(question: str) -> str:
         return result.get("final_answer") or "답변을 생성하지 못했습니다."
     except Exception as exc:
         return f"[engine] 쿼리 처리 중 오류 발생: {exc}"
+
+
+async def query_engine_stream(question: str) -> AsyncIterator[str]:
+    """Insurance RAG 파이프라인을 스트리밍으로 실행하고 토큰을 하나씩 yield한다.
+
+    Example:
+        from engine.engine import query_engine_stream
+        async for chunk in query_engine_stream("암 진단비 보장 조건이 뭐야?"):
+            print(chunk, end="", flush=True)
+    """
+    _, stream = await query_engine_stream_with_metadata(question)
+    async for chunk in stream:
+        yield chunk
+
+
+async def query_engine_stream_with_metadata(
+    question: str,
+) -> tuple[dict[str, Any], AsyncIterator[str]]:
+    """Insurance RAG 파이프라인을 스트리밍으로 실행하고 메타데이터도 함께 반환한다.
+
+    Returns:
+        (meta_ref, stream) 튜플
+        - meta_ref: 처음엔 {"status": "running", "metadata": {}}
+                    스트림 소진 후 {"status": "success/failure", "metadata": {...}} 로 갱신됨
+                    metadata 키: intent, tasks, task_statuses, plan_candidates, final_answer
+        - stream: 생성 중인 토큰을 하나씩 yield하는 AsyncIterator[str]
+
+    Example:
+        from engine.engine import query_engine_stream_with_metadata
+        meta, stream = await query_engine_stream_with_metadata("암 진단비 보장 조건이 뭐야?")
+        async for chunk in stream:
+            print(chunk, end="", flush=True)
+        print(meta)  # 스트림 소진 후 메타데이터 확인
+    """
+    from uuid import uuid4
+
+    if not question or not question.strip():
+        async def _empty() -> AsyncIterator[str]:
+            yield "질문을 입력해 주세요."
+        return {"status": "failure", "metadata": {}}, _empty()
+
+    graph = _init_graph()
+
+    initial_state = {
+        "question": question,
+        "request_id": uuid4().hex[:12],
+        "intent": "",
+        "tasks": [],
+        "task_candidates": [],
+        "required_tasks": [],
+        "concept_keywords": [],
+        "product_keywords": [],
+        "analysis_notes": [],
+        "user_filters": {},
+        "resolved_concepts": [],
+        "task_plan": [],
+        "task_results": [],
+        "response_sections": [],
+        "guarded_sections": [],
+        "plan_candidates": [],
+        "allowed_entities": {},
+        "final_answer": "",
+        "trace_log": [],
+        "node_models": {},
+        "execution_metrics": {},
+    }
+
+    # 스트림 소진 후 호출자가 읽을 수 있도록 mutable dict로 반환
+    meta_ref: dict[str, Any] = {"status": "running", "metadata": {}}
+
+    async def _stream() -> AsyncIterator[str]:
+        try:
+            async for event in graph.astream_events(initial_state, version="v2"):
+                etype = event["event"]
+
+                # generator 노드에서 LLM이 토큰을 생성할 때마다 yield
+                if (
+                    etype == "on_chat_model_stream"
+                    and event.get("metadata", {}).get("langgraph_node") == "generator"
+                ):
+                    chunk = event["data"]["chunk"]
+                    if hasattr(chunk, "content") and chunk.content:
+                        yield chunk.content
+
+                # 그래프 전체 완료 시 메타데이터 수집
+                elif etype == "on_chain_end" and not event.get("metadata", {}).get("langgraph_node"):
+                    output = event["data"].get("output", {})
+                    if isinstance(output, dict) and "final_answer" in output:
+                        task_results = output.get("task_results", []) or []
+                        meta_ref["status"] = "success"
+                        meta_ref["metadata"] = {
+                            "intent": output.get("intent"),
+                            "tasks": output.get("tasks", []) or [],
+                            "task_statuses": [
+                                {
+                                    "task_type": x.get("task_type"),
+                                    "status": x.get("status"),
+                                    "evidence_count": x.get("evidence_count", len(x.get("evidence", []))),
+                                    "duration_ms": x.get("duration_ms"),
+                                }
+                                for x in task_results
+                            ],
+                            "plan_candidates": output.get("plan_candidates", []) or [],
+                            "final_answer": output.get("final_answer", ""),
+                        }
+        except Exception as exc:
+            meta_ref["status"] = "failure"
+            meta_ref["metadata"] = {"error": str(exc)}
+
+    return meta_ref, _stream()

@@ -364,6 +364,7 @@ function App() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isStreaming, setIsStreaming] = useState(false);
   const [logs, setLogs] = useState([]);
   const [debugData, setDebugData] = useState(null);
 
@@ -389,7 +390,7 @@ function App() {
   }, [debugData]);
 
   const sendMessage = async () => {
-    if (!input.trim() || isLoading) return;
+    if (!input.trim() || isLoading || isStreaming) return;
     const userMessage = { role: 'user', text: input };
     setMessages((prev) => [...prev, userMessage]);
     setInput('');
@@ -398,19 +399,92 @@ function App() {
     setDebugData(null);
 
     try {
-      const response = await axios.post(`${API_BASE}/chat`, { query: userMessage.text });
-      const data = response.data;
-      setMessages((prev) => [...prev, { role: 'assistant', text: data.answer || '응답이 없습니다.' }]);
-      setLogs(data.logs || []);
-      setDebugData(data);
+      const response = await fetch(`${API_BASE}/chat/stream`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: userMessage.text }),
+      });
+
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let assistantMsgAdded = false;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop();
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const jsonStr = line.slice(6).trim();
+          if (!jsonStr) continue;
+
+          let event;
+          try { event = JSON.parse(jsonStr); } catch { continue; }
+
+          if (event.type === 'chunk') {
+            if (!assistantMsgAdded) {
+              assistantMsgAdded = true;
+              setIsLoading(false);
+              setIsStreaming(true);
+              setMessages((prev) => [...prev, { role: 'assistant', text: event.text }]);
+            } else {
+              setMessages((prev) => {
+                const next = [...prev];
+                next[next.length - 1] = { role: 'assistant', text: next[next.length - 1].text + event.text };
+                return next;
+              });
+            }
+          } else if (event.type === 'done') {
+            if (!assistantMsgAdded) {
+              setMessages((prev) => [...prev, { role: 'assistant', text: event.answer || '응답이 없습니다.' }]);
+            } else {
+              setMessages((prev) => {
+                const next = [...prev];
+                next[next.length - 1] = { role: 'assistant', text: event.answer || '응답이 없습니다.' };
+                return next;
+              });
+            }
+            setLogs(event.logs || []);
+            setDebugData(event);
+            setIsLoading(false);
+            setIsStreaming(false);
+          } else if (event.type === 'error') {
+            const errText = '요청 처리 중 오류가 발생했습니다. 백엔드 로그를 확인해 주세요.';
+            if (!assistantMsgAdded) {
+              setMessages((prev) => [...prev, { role: 'assistant', text: errText }]);
+            } else {
+              setMessages((prev) => {
+                const next = [...prev];
+                next[next.length - 1] = { role: 'assistant', text: errText };
+                return next;
+              });
+            }
+            setIsLoading(false);
+            setIsStreaming(false);
+          }
+        }
+      }
     } catch (error) {
-      setMessages((prev) => [
-        ...prev,
-        { role: 'assistant', text: '요청 처리 중 오류가 발생했습니다. 백엔드 로그를 확인해 주세요.' },
-      ]);
+      setMessages((prev) => {
+        const next = [...prev];
+        if (next[next.length - 1]?.role === 'assistant') {
+          next[next.length - 1] = { role: 'assistant', text: '요청 처리 중 오류가 발생했습니다. 백엔드 로그를 확인해 주세요.' };
+        } else {
+          next.push({ role: 'assistant', text: '요청 처리 중 오류가 발생했습니다. 백엔드 로그를 확인해 주세요.' });
+        }
+        return next;
+      });
       setLogs((prev) => [...prev, `[System Error] ${error.message}`]);
     } finally {
       setIsLoading(false);
+      setIsStreaming(false);
     }
   };
 
@@ -500,7 +574,7 @@ function App() {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
             />
-            <button onClick={sendMessage} disabled={isLoading || !input.trim()} className="chat-send-btn">
+            <button onClick={sendMessage} disabled={isLoading || isStreaming || !input.trim()} className="chat-send-btn">
               <Send size={18} />
             </button>
           </div>
